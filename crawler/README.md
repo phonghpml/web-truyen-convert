@@ -4,7 +4,11 @@ emoji: 📚
 colorFrom: blue
 colorTo: indigo
 sdk: docker
+app_port: 7860
 pinned: false
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+Dự án Crawler và Convert truyện chữ tự động.
+- Framework: FastAPI
+- Engine: Playwright (Chromium)
+- Translator: Aho-Corasick (1.4M phrases)
