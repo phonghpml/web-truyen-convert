@@ -2,6 +2,8 @@ name: Deploy Crawler to HF
 on:
   push:
     branches: [main] 
+    paths:
+      - 'crawler/**' # Chỉ chạy khi có thay đổi trong thư mục crawler
 
 jobs:
   deploy:
