@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { X, ArrowLeft, ArrowRight, Settings, Loader2 } from "lucide-react";
+import { CRAWLER_BASE_URL } from "@/lib/constants";
 
 interface ReaderModalProps {
   isOpen: boolean;
@@ -23,7 +24,7 @@ export default function ReaderModal({ isOpen, onClose, chapterTitle, chapterUrl 
   const fetchContent = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/get-chapter-content", {
+      const res = await fetch(`${CRAWLER_BASE_URL}/get-chapter-content`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: chapterUrl })
