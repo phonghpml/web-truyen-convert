@@ -1,19 +1,10 @@
-#chay moi truong ao
-source venv/bin/activate
-#chay code
-uvicorn main:app --reload
 ---
 title: Crawler Web Truyen
-emoji: 🕸️
+emoji: 📚
 colorFrom: blue
-colorTo: green
+colorTo: indigo
 sdk: docker
-app_port: 7860
+pinned: false
 ---
 
-# Crawler API Service
-Hệ thống thu thập dữ liệu tự động.
-
-## Tài liệu API
-- Swagger: [URL-SPACE]/docs
-- ReDoc: [URL-SPACE]/redoc
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
