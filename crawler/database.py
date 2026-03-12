@@ -1,8 +1,9 @@
+import os
 from pymongo import MongoClient
 from datetime import datetime
 
 # Cấu hình kết nối
-MONGO_URI = "mongodb+srv://admin_web_truyen:290599@bemain.shalbdz.mongodb.net/web_truyen?appName=BeMain"
+MONGO_URI = os.getenv("MONGODB_URI")
 client = MongoClient(MONGO_URI)
 db = client.web_truyen
 

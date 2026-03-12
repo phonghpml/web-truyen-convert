@@ -9,10 +9,13 @@ async def get_browser():
     global _browser, _context
     if _browser is None:
         pw = await async_playwright().start()
-        # Mở trình duyệt ở chế độ ẩn danh nhưng giữ lại context
-        _browser = await pw.chromium.launch(headless=True) # Để True cho nhanh
+        # Thêm các args này để chạy ổn định trên Docker/Linux
+        _browser = await pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        )
         _context = await _browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."
         )
     return _context
 

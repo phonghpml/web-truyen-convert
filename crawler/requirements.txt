@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+playwright
+pymongo
+python-dotenv
+pyahocorasick
+gunicorn

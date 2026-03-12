@@ -1,0 +1,23 @@
+name: Deploy Crawler to HF
+on:
+  push:
+    branches: [main] # Chạy khi bạn push lên nhánh main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Push Crawler Folder to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Thiết lập tên và email để git có thể làm việc
+          git config --global user.email "buitrongphonghp@gmail.com"
+          git config --global user.name "phong"
+          
+          # Tách thư mục crawler ra một nhánh tạm và đẩy lên HF
+          git subtree push --prefix crawler https://phongphml:$HF_TOKEN@huggingface.co/spaces/phongphml/TÊN_SPACE_CỦA_BẠN main
