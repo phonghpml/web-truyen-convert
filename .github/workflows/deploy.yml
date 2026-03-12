@@ -15,9 +15,12 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Cấu hình danh tính Git tạm thời cho máy chủ GitHub
-          git config --global user.email "phongph@example.com"
-          git config --global user.name "Phonghp"
+          # 1. Cấu hình danh tính Git (Sửa lại đúng tên và email của bạn)
+          git config --global user.email "phongphml@gmail.com"
+          git config --global user.name "phongphml"
           
-          # Lệnh tách thư mục 'crawler' và đẩy lên Space
-          git subtree push --prefix crawler https://Phonghp:$HF_TOKEN@huggingface.co/spaces/Phonghp/crawler_web_truyen main
+          # 2. Tách thư mục 'crawler' ra một nhánh tạm thời
+          git subtree split --prefix crawler -b deploy-branch
+          
+          # 3. Ép buộc đẩy nhánh này lên Hugging Face (Sửa lại URL cho đúng user Phonghp)
+          git push -f https://Phonghp:$HF_TOKEN@huggingface.co/spaces/Phonghp/crawler_web_truyen deploy-branch:main
