@@ -1,5 +1,6 @@
 from playwright.async_api import async_playwright
 import asyncio
+import urllib.parse
 
 # Biến toàn cục để giữ trình duyệt luôn mở
 _browser = None
@@ -9,82 +10,65 @@ async def get_browser():
     global _browser, _context
     if _browser is None:
         pw = await async_playwright().start()
-        # Thêm các args này để chạy ổn định trên Docker/Linux
+        # Thêm các args để chạy ổn định trên Docker và giấu dấu vết bot
         _browser = await pw.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+            args=[
+                "--no-sandbox", 
+                "--disable-setuid-sandbox", 
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled" # Giấu trạng thái bot
+            ]
         )
         _context = await _browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            viewport={'width': 1280, 'height': 720},
+            locale="vi-VN"
         )
     return _context
 
 async def scrape_basic_info(url: str):
+    url = urllib.parse.unquote(url) # Fix lỗi link mã hóa gây 400
     context = await get_browser()
     page = await context.new_page()
-    
-    # Tối ưu: Chặn tải ảnh, css để tải trang nhanh hơn 5 lần
     await page.route("**/*.{png,jpg,jpeg,gif,css,woff,woff2,svg}", lambda route: route.abort())
 
     try:
-        # Chỉ đợi tối đa 15s, nếu quá là bỏ qua
-        await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
         
-        # Đợi một chút nếu có Cloudflare (tùy độ khó của web)
-        # await page.wait_for_timeout(1000) 
-
-        # Lấy dữ liệu bằng Selector (Bạn hãy kiểm tra lại Class trên web nhé)
         data = await page.evaluate('''() => {
             const title = document.querySelector('.booknav2 h1 a')?.innerText || "";
             const author = document.querySelector('.booknav2 p a')?.innerText || "";
             const desc = document.querySelector('.navtxt')?.innerText || "";
             const cover = document.querySelector('.bookimg2 img')?.src || "";
-            return {
-                title_cn: title,
-                author_cn: author,
-                description_cn: desc,
-                cover_url: cover
-            };
+            return { title_cn: title, author_cn: author, description_cn: desc, cover_url: cover };
         }''')
-        
         return data
     except Exception as e:
-        print(f"❌ Lỗi Playwright: {e}")
+        print(f"❌ Lỗi Playwright Info: {e}")
         return None
     finally:
-        await page.close() # Chỉ đóng Tab, KHÔNG đóng trình duyệt
+        await page.close()
 
-# Thêm vào scraper.py
 async def scrape_chapters(url: str):
+    url = urllib.parse.unquote(url)
     context = await get_browser()
     page = await context.new_page()
-    
-    # Tăng tốc độ bằng cách chặn các tài nguyên không cần thiết
     await page.route("**/*.{png,jpg,jpeg,gif,css,woff,woff2,svg}", lambda route: route.abort())
 
     try:
-        # Đợi trang tải xong DOM (chứa danh sách chương)
         await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        
-        # Đợi 1 giây để đảm bảo danh sách chương dài đã render hết
         await page.wait_for_timeout(1000)
 
-        # Lấy tất cả link trong các vùng chứa danh sách chương của 69shuba
         chapters = await page.evaluate('''() => {
             const selectors = '.catalog ul li a, .quanshu ul li a, .content ul li a';
             const items = Array.from(document.querySelectorAll(selectors));
-            
-            return items.map(item => ({
-                title_cn: item.innerText.trim(),
-                url: item.href
-            }));
+            return items.map(item => ({ title_cn: item.innerText.trim(), url: item.href }));
         }''')
         
-        # LỌC: Chỉ lấy link chứa mã số chương (/txt/) và tiêu đề không rỗng
-        # Link /book/ thường chỉ là link giới thiệu, không phải chương
-        filtered = [c for c in chapters if "/txt/" in c['url'] and c['title_cn']]
+        # Nhận diện cả link /txt/ và /book/
+        filtered = [c for c in chapters if ("/txt/" in c['url'] or "/book/" in c['url']) and c['title_cn']]
         
-        # Loại bỏ trùng lặp (vì trang này thường lặp lại 10 chương mới nhất ở đầu)
         unique_chapters = []
         seen_urls = set()
         for ch in filtered:
@@ -101,20 +85,28 @@ async def scrape_chapters(url: str):
         await page.close()
 
 async def scrape_chapter_content(url: str):
+    url = urllib.parse.unquote(url)
+    
+    # 69shuba thường chặn bot ở link /txt/, tự động chuyển sang link /book/ để ổn định hơn
+    if "/txt/" in url:
+        url = url.replace("/txt/", "/book/")
+        if not url.endswith(".htm"):
+            url += ".htm"
+
     context = await get_browser()
     page = await context.new_page()
-    # Chặn ảnh để tải cực nhanh vì chỉ lấy text
     await page.route("**/*.{png,jpg,jpeg,gif,css,svg}", lambda route: route.abort())
 
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        # Dùng networkidle để đợi trang tải xong hoàn toàn
+        await page.goto(url, wait_until="networkidle", timeout=30000)
         
         content = await page.evaluate('''() => {
-            const el = document.querySelector('.txtnav');
+            // Thêm nhiều selector dự phòng
+            const el = document.querySelector('.txtnav') || document.querySelector('.content') || document.querySelector('#content');
             if (!el) return "";
             
-            // Xóa các thành phần thừa, quảng cáo, và link nhúng
-            const extras = el.querySelectorAll('h1, .head, .bottom-ad, script, style, a');
+            const extras = el.querySelectorAll('h1, .head, .bottom-ad, script, style, a, .top_ad');
             extras.forEach(item => item.remove());
             
             return el.innerText;
@@ -126,4 +118,3 @@ async def scrape_chapter_content(url: str):
         return None
     finally:
         await page.close()
-
