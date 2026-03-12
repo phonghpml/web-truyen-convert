@@ -1,34 +1,41 @@
 FROM python:3.9
 
-# 1. Cài đặt các thư viện hệ thống cần thiết
+# 1. Cài đặt các thư viện hệ thống cần thiết (Dùng quyền root mặc định của Docker build)
+USER root
 RUN apt-get update && apt-get install -y \
-    lsb-release \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libgtk-3-0 \
     libnss3 \
-    libxss1 \
-    libxtst6 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Tạo User mới (Hugging Face yêu cầu User ID 1000)
+# 2. Thiết lập thư mục làm việc và User
+WORKDIR /app
 RUN useradd -m -u 1000 user
 USER user
-ENV PATH="/home/user/.local/bin:$PATH"
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
 
-WORKDIR /app
-
-# 3. Copy và cài đặt thư viện Python
-COPY --chown=user:user requirements.txt .
+# 3. Cài đặt thư viện Python
+COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# 4. Cài đặt Playwright và Trình duyệt
-# Chúng ta cài đặt vào thư mục home của user để không bị lỗi quyền
-RUN playwright install chromium
-RUN playwright install-deps chromium
+# 4. CÀI ĐẶT PLAYWRIGHT (Điểm mấu chốt: Cài vào thư mục của user)
+RUN python3 -m playwright install chromium
 
-# 5. Copy toàn bộ code vào container
-COPY --chown=user:user . .
+# 5. Copy toàn bộ code
+COPY --chown=user . .
 
-# 6. Chạy ứng dụng (Port 7860 là mặc định của HF)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# 6. Chạy ứng dụng trên cổng 7860
+CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
