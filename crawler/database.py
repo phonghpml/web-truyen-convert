@@ -1,7 +1,9 @@
 import os
+from dotenv import load_dotenv
 from pymongo import MongoClient
 from datetime import datetime
 
+load_dotenv() # Nạp biến từ file .env
 # Cấu hình kết nối
 MONGO_URI = os.getenv("MONGODB_URI")
 client = MongoClient(MONGO_URI)

@@ -105,7 +105,7 @@ async def api_get_chapters(request: TranslationRequest):
 async def api_get_content(request: TranslationRequest):
     print(f"📄 Đang lấy nội dung: {request.url}")
     raw_content = await scr.scrape_chapter_content(request.url)
-    
+    print(f"✅ Đã lấy nội dung thô, độ dài: {len(raw_content)} ký tự")
     if not raw_content:
         raise HTTPException(status_code=400, detail="Không lấy được nội dung chương.")
 
