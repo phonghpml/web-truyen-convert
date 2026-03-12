@@ -15,12 +15,18 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # 1. Cấu hình danh tính Git (Sửa lại đúng tên và email của bạn)
-          git config --global user.email "phongphml@gmail.com"
-          git config --global user.name "phongphml"
+          # 1. Đi vào thư mục crawler
+          cd crawler
           
-          # 2. Tách thư mục 'crawler' ra một nhánh tạm thời
-          git subtree split --prefix crawler -b deploy-branch
+          # 2. Khởi tạo Git mới tại đây để xóa sạch lịch sử file > 10MB
+          git init
+          git config user.email "phongphml@gmail.com"
+          git config user.name "phongphml"
           
-          # 3. Ép buộc đẩy nhánh này lên Hugging Face (Sửa lại URL cho đúng user Phonghp)
-          git push -f https://Phonghp:$HF_TOKEN@huggingface.co/spaces/Phonghp/crawler_web_truyen deploy-branch:main
+          # 3. Thêm toàn bộ file hiện tại (đã chia nhỏ < 10MB)
+          git add .
+          git commit -m "Deploy clean version without large files"
+          
+          # 4. Ép buộc đẩy lên Hugging Face (Dùng -f)
+          # Lưu ý: nhánh mặc định của 'git init' thường là 'master', nên ta đẩy master:main
+          git push -f https://Phonghp:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Phonghp/crawler_web_truyen master:main
