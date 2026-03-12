@@ -1,7 +1,7 @@
 name: Deploy Crawler to HF
 on:
   push:
-    branches: [main] # Chạy khi bạn push lên nhánh main
+    branches: [main] 
 
 jobs:
   deploy:
@@ -15,9 +15,9 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Thiết lập tên và email để git có thể làm việc
-          git config --global user.email "buitrongphonghp@gmail.com"
-          git config --global user.name "phong"
+          # Cấu hình danh tính Git tạm thời cho máy chủ GitHub
+          git config --global user.email "phongph@example.com"
+          git config --global user.name "Phonghp"
           
-          # Tách thư mục crawler ra một nhánh tạm và đẩy lên HF
-          git subtree push --prefix crawler https://phongphml:$HF_TOKEN@huggingface.co/spaces/phongphml/TÊN_SPACE_CỦA_BẠN main
+          # Lệnh tách thư mục 'crawler' và đẩy lên Space
+          git subtree push --prefix crawler https://Phonghp:$HF_TOKEN@huggingface.co/spaces/Phonghp/crawler_web_truyen main
