@@ -2,30 +2,43 @@ from playwright.async_api import async_playwright
 import asyncio
 import urllib.parse
 
-# Biến toàn cục để giữ trình duyệt luôn mở
+
+
+# Biến toàn cục
 _browser = None
 _context = None
+
 
 async def get_browser():
     global _browser, _context
     if _browser is None:
         pw = await async_playwright().start()
-        # Thêm các args để chạy ổn định trên Docker và giấu dấu vết bot
         _browser = await pw.chromium.launch(
             headless=True,
             args=[
-                "--no-sandbox", 
-                "--disable-setuid-sandbox", 
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled" # Giấu trạng thái bot
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                # GIẤU DẤU VẾT BOT (QUAN TRỌNG NHẤT)
+                "--disable-blink-features=AutomationControlled", 
+                "--disable-infobars",
+                "--window-position=0,0",
+                "--ignore-certificate-errors",
             ]
         )
         _context = await _browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             viewport={'width': 1280, 'height': 720},
-            locale="vi-VN"
+            locale="vi-VN",
+            timezone_id="Asia/Ho_Chi_Minh"
         )
+        
+        # XOÁ DẤU VẾT WEBDRIVER TRÊN TOÀN BỘ TRANG
+        await _context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = { runtime: {} };
+        """)
     return _context
+
 
 async def scrape_basic_info(url: str):
     url = urllib.parse.unquote(url) # Fix lỗi link mã hóa gây 400
@@ -85,36 +98,47 @@ async def scrape_chapters(url: str):
         await page.close()
 
 async def scrape_chapter_content(url: str):
-    url = urllib.parse.unquote(url)
-    
-    # 69shuba thường chặn bot ở link /txt/, tự động chuyển sang link /book/ để ổn định hơn
-    if "/txt/" in url:
-        url = url.replace("/txt/", "/book/")
-        if not url.endswith(".htm"):
-            url += ".htm"
-
+    url = urllib.parse.unquote(url).strip()
     context = await get_browser()
     page = await context.new_page()
-    await page.route("**/*.{png,jpg,jpeg,gif,css,svg}", lambda route: route.abort())
+    
+    # CÁCH GỠ LỖI: Dùng script tự thân để giấu webdriver thay cho thư viện lỗi
+    await page.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        window.chrome = { runtime: {} };
+    """)
 
     try:
-        # Dùng networkidle để đợi trang tải xong hoàn toàn
-        await page.goto(url, wait_until="networkidle", timeout=30000)
+        # Giả lập Referer để tránh bị 69shuba nghi ngờ bot cào
+        await page.set_extra_http_headers({"Referer": "https://69shuba.cx"})
         
+        # 1. Vào trang và đợi cho đến khi bắt đầu load (commit)
+        await page.goto(url, wait_until="commit", timeout=30000)
+        
+        # 2. Quan trọng: Nghỉ 5 giây để Cloudflare nhả cho qua
+        await asyncio.sleep(5) 
+        
+        # 3. Cuộn chuột nhẹ để giả lập người thật
+        await page.mouse.wheel(0, 500)
+        await asyncio.sleep(1) 
+        
+        # 4. Chờ đúng thẻ chứa nội dung truyện hiện ra
+        await page.wait_for_selector(".txtnav", timeout=20000)
+
         content = await page.evaluate('''() => {
-            // Thêm nhiều selector dự phòng
-            const el = document.querySelector('.txtnav') || document.querySelector('.content') || document.querySelector('#content');
-            if (!el) return "";
-            
-            const extras = el.querySelectorAll('h1, .head, .bottom-ad, script, style, a, .top_ad');
-            extras.forEach(item => item.remove());
-            
+            const el = document.querySelector('.txtnav');
+            if (!el) return null;
+            // Xóa sạch quảng cáo, rác
+            const targets = 'h1, .head, .bottom-ad, script, style, a, .top_ad, .p_ad';
+            el.querySelectorAll(targets).forEach(item => item.remove());
             return el.innerText;
         }''')
         
-        return content.strip()
+        return content.strip() if content else None
     except Exception as e:
-        print(f"❌ Lỗi Scrape Content: {e}")
+        # Chụp ảnh lỗi để soi xem nó hiện thông báo gì (Captcha hay Cloudflare)
+        await page.screenshot(path="error_debug.png")
+        print(f"❌ Lỗi Scrape Content: {str(e)}")
         return None
     finally:
         await page.close()
