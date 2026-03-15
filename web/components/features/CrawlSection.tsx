@@ -7,7 +7,6 @@ import { ChapterList } from "../ui/ChapterList";
 import ReaderModal from "../ui/ReaderModal";
 import { getCrawlerInfo, getCrawlerChapters } from "@/lib/hooks";
 import { getSearchLink, isValidUrl } from "@/lib/utils";
-import { SelectedChapter } from "@/lib/types";
 import { MESSAGES } from "@/lib/constants";
 
 interface CrawlSectionProps {
@@ -18,13 +17,21 @@ export default function CrawlSection({ onSearchMode }: CrawlSectionProps) {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [data, setData] = useState<any>(null);
-  const [chapters, setChapters] = useState<any[]>([]);
+  const [chapters, setChapters] = useState<any[]>([]); 
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"idle" | "convert">("idle");
 
-  const [selectedChapter, setSelectedChapter] = useState<SelectedChapter | null>(null);
+  // --- LOGIC ĐỌC TRUYỆN TỐI ƯU ---
+  const [readingList, setReadingList] = useState<any[]>([]); // Luôn sort 1 -> 100
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Gọi callback khi mode thay đổi
+  // Helper để trích xuất số chương giúp sort chuẩn
+  const parseChapterNum = (title: string) => {
+    const m = title.match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[0]) : 0;
+  };
+
   useEffect(() => {
     const isSearching = mode !== "idle";
     onSearchMode?.(isSearching);
@@ -32,8 +39,6 @@ export default function CrawlSection({ onSearchMode }: CrawlSectionProps) {
 
   const handleSearch = async () => {
     if (!input.trim()) return;
-    
-    // Navigate to search page với query
     router.push(getSearchLink(input));
   };
 
@@ -45,14 +50,17 @@ export default function CrawlSection({ onSearchMode }: CrawlSectionProps) {
     setMode("idle");
 
     try {
-      // 1. Lấy thông tin cơ bản
       const infoResult = await getCrawlerInfo(input);
       if (infoResult.success) setData(infoResult.data);
 
-      // 2. Lấy danh sách chương
       const chapterResult = await getCrawlerChapters(input);
       if (chapterResult.success) {
-        setChapters(chapterResult.chapters);
+        // LUÔN TẠO MỘT BẢN SORT TĂNG DẦN ĐỂ ĐIỀU HƯỚNG KHÔNG BỊ NGƯỢC
+        const sortedAsc = [...chapterResult.chapters].sort((a, b) => 
+          parseChapterNum(a.title_vi || "") - parseChapterNum(b.title_vi || "")
+        );
+        setChapters(chapterResult.chapters); // Danh sách hiện ra màn hình
+        setReadingList(sortedAsc);          // Danh sách dùng để chuyển chương (1, 2, 3...)
         setMode("convert");
       }
     } catch (err) {
@@ -65,13 +73,30 @@ export default function CrawlSection({ onSearchMode }: CrawlSectionProps) {
 
   const handleExecute = async () => {
     if (!input) return;
-
     if (isValidUrl(input)) {
-      // Nếu là URL → convert
       await handleConvert();
     } else {
-      // Nếu không phải URL → tìm kiếm
       await handleSearch();
+    }
+  };
+
+  // HÀM XỬ LÝ KHI CHỌN CHƯƠNG
+  const handleSelectChapter = (chapter: any) => {
+    // Tìm vị trí chính xác của chương này trong ReadingList (1 -> 100)
+    const idx = readingList.findIndex(c => c.url === chapter.url);
+    setCurrentIndex(idx);
+    setIsModalOpen(true);
+  };
+
+  const handleNext = () => {
+    if (currentIndex < readingList.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
     }
   };
 
@@ -84,28 +109,33 @@ export default function CrawlSection({ onSearchMode }: CrawlSectionProps) {
         loading={loading}
       />
 
-      {/* MODE CONVERT: Hiển thị Card + Danh sách chương */}
       {mode === "convert" && data && (
         <>
           <BookCard data={data} />
           {chapters.length > 0 && (
             <ChapterList
               chapters={chapters}
-              onSelectChapter={(title, url) =>
-                setSelectedChapter({ title, url })
-              }
+              // Đổi lại: chỉ truyền chapter được chọn
+              onSelectChapter={(chapter) => handleSelectChapter(chapter)}
             />
           )}
         </>
       )}
 
-      {/* Modal hiển thị nội dung chương */}
-      <ReaderModal
-        isOpen={!!selectedChapter}
-        onClose={() => setSelectedChapter(null)}
-        chapterTitle={selectedChapter?.title || ""}
-        chapterUrl={selectedChapter?.url || ""}
-      />
+      {isModalOpen && currentIndex !== -1 && (
+        <ReaderModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setCurrentIndex(-1);
+          }}
+          // Dữ liệu lấy từ readingList để đảm bảo tiêu đề và URL khớp với thứ tự tiến
+          chapterTitle={readingList[currentIndex]?.title_vi || ""}
+          chapterUrl={readingList[currentIndex]?.url || ""}
+          onNextChapter={handleNext}
+          onPrevChapter={handlePrev}
+        />
+      )}
     </div>
   );
 }

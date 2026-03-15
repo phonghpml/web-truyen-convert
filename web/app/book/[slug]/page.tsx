@@ -6,12 +6,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { BookCard } from "@/components/ui/BookCard";
 import { ChapterList } from "@/components/ui/ChapterList";
 import ReaderModal from "@/components/ui/ReaderModal";
-import {
-  LoadingState,
-  ErrorState,
-} from "@/components/shared/StateComponents";
+import { LoadingState, ErrorState } from "@/components/shared/StateComponents";
 import { fetchBook, fetchChapters } from "@/lib/hooks";
-import { decodeBookId } from "@/lib/utils";
 import { SelectedChapter, Book, Chapter } from "@/lib/types";
 import { MESSAGES } from "@/lib/constants";
 
@@ -26,105 +22,101 @@ export default function BookDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Danh sách này sẽ luôn được sort từ nhỏ đến lớn để điều hướng không bị ngược
+  const [readingList, setReadingList] = useState<Chapter[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+
+  // Hàm hỗ trợ lấy số chương để sắp xếp chuẩn
+  const parseChapterNum = (title: string) => {
+    const m = title.match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[0]) : 0;
+  };
+
   useEffect(() => {
     const fetchBookData = async () => {
       try {
         setLoading(true);
-        const decodedSlug = decodeBookId(slug);
-
         const { book: bookData, error: bookError } = await fetchBook(slug);
-
         if (bookError || !bookData) {
           setError(bookError || MESSAGES.NO_BOOK_FOUND);
-          setBook(null);
-          setChapters([]);
           return;
         }
-
         setBook(bookData);
 
-        // Fetch chapters
         if (bookData.source_url) {
-          const { chapters: chaptersData, error: chaptersError } =
-            await fetchChapters(bookData.source_url);
-
+          const { chapters: chaptersData, error: chaptersError } = await fetchChapters(bookData.source_url);
           if (!chaptersError) {
-            setChapters(chaptersData);
+            // LUÔN SORT DANH SÁCH GỐC TỪ NHỎ ĐẾN LỚN NGAY TỪ ĐẦU
+            const sorted = [...chaptersData].sort((a, b) => 
+                parseChapterNum(a.title_vi || "") - parseChapterNum(b.title_vi || "")
+            );
+            setChapters(sorted);
+            setReadingList(sorted); // Reading list mặc định là từ thấp đến cao
           }
         }
-
         setError(null);
       } catch (err) {
-        console.error("Error fetching book details:", err);
         setError(MESSAGES.ERROR_BOOK_DETAILS);
       } finally {
         setLoading(false);
       }
     };
-
-    if (slug) {
-      fetchBookData();
-    }
+    if (slug) fetchBookData();
   }, [slug]);
 
-  const handleBack = () => {
-    router.push("/");
+  // Hàm xử lý khi chọn chương
+  const handleSelectChapter = (chapter: any) => {
+    // Tìm vị trí của chương này trong danh sách đã được sort tăng dần
+    const index = readingList.findIndex(c => c.url === chapter.url);
+    setCurrentIndex(index);
+    setDetailChapter({ 
+      title: chapter.title_vi || "Chương không tên", 
+      url: chapter.url 
+    });
   };
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-black text-white font-mono p-6">
-        <div className="max-w-5xl mx-auto">
-          <Navbar session={null} onHomeClick={handleBack} />
-          <LoadingState message={MESSAGES.LOADING} />
-        </div>
-      </main>
-    );
-  }
+  const handleNext = () => {
+    if (currentIndex < readingList.length - 1) {
+      const nextIdx = currentIndex + 1;
+      const nextChapter = readingList[nextIdx];
+      setCurrentIndex(nextIdx);
+      setDetailChapter({ title: nextChapter.title_vi, url: nextChapter.url });
+    }
+  };
 
-  if (error || !book) {
-    return (
-      <main className="min-h-screen bg-black text-white font-mono p-6">
-        <div className="max-w-5xl mx-auto">
-          <Navbar session={null} onHomeClick={handleBack} />
-          <ErrorState message={error || MESSAGES.NO_BOOK_FOUND} onHome={handleBack} />
-        </div>
-      </main>
-    );
-  }
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      const prevIdx = currentIndex - 1;
+      const prevChapter = readingList[prevIdx];
+      setCurrentIndex(prevIdx);
+      setDetailChapter({ title: prevChapter.title_vi, url: prevChapter.url });
+    }
+  };
+
+  if (loading) return <div className="bg-black min-h-screen p-10 text-orange-500">Đang tải...</div>;
 
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
       <div className="max-w-5xl mx-auto">
-        <Navbar session={null} onHomeClick={handleBack} />
-
+        <Navbar session={null} onHomeClick={() => router.push("/")} />
         <div className="mt-12">
-          <h3 className="text-2xl font-bold text-white mb-4">Thông tin truyện</h3>
           <BookCard data={book} />
-
           {chapters.length > 0 && (
             <ChapterList
               chapters={chapters}
-              onSelectChapter={(title, url) =>
-                setDetailChapter({ title, url })
-              }
+              // Chỉ cần truyền chapter được click, page.tsx tự xử lý vị trí
+              onSelectChapter={(chapter) => handleSelectChapter(chapter)}
             />
           )}
-
-          <button
-            onClick={handleBack}
-            className="mt-6 text-[10px] text-orange-500 uppercase font-bold hover:text-orange-400 transition-colors"
-          >
-            ← Quay lại danh sách
-          </button>
         </div>
 
-        {/* reader modal for details */}
         <ReaderModal
           isOpen={!!detailChapter}
           onClose={() => setDetailChapter(null)}
           chapterTitle={detailChapter?.title || ""}
           chapterUrl={detailChapter?.url || ""}
+          onNextChapter={handleNext}
+          onPrevChapter={handlePrev}
         />
       </div>
     </main>
