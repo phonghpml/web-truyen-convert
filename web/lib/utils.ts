@@ -48,3 +48,8 @@ export const isValidUrl = (str: string): boolean => {
 export const getBookId = (book: { source_url?: string; _id?: string }): string | null => {
   return book.source_url || book._id || null;
 };
+
+export const parseChapterNum = (title: string): number => {
+  const m = title.match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[0]) : 0;
+};

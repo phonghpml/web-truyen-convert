@@ -1,15 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Navbar nằm trong folder layout
-import { Navbar } from "@/components/layout/Navbar"
-// CrawlSection nằm trong folder features
-import CrawlSection from "@/components/features/CrawlSection"
-// BooksDisplay nằm trong folder features
-import BooksDisplay from "@/components/features/BooksDisplay"
-
+import { useSession } from "next-auth/react"; // Thêm để lấy thông tin user
+import { Navbar } from "@/components/layout/Navbar";
+import CrawlSection from "@/components/features/CrawlSection";
+import BooksDisplay from "@/components/features/BooksDisplay";
 
 export default function Home() {
+  const { data: session } = useSession(); // Lấy session từ NextAuth
   const [isSearching, setIsSearching] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
@@ -21,28 +19,32 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
       <div className="max-w-5xl mx-auto">
-
-        {/* THANH NAVBAR ĐÃ TÁCH RIÊNG */}
-        <Navbar session={null} onHomeClick={handleHomeClick} />
+        
+        {/* Truyền session thật vào để Navbar hiện Avatar hoặc nút Đăng xuất */}
+        <Navbar session={session} onHomeClick={handleHomeClick} />
 
         <div className="text-center mt-20">
-          <h2 className="text-6xl font-black mb-2 italic tracking-tighter">DOC TRUYEN FREE</h2>
+          <h2 className="text-6xl font-black mb-2 italic tracking-tighter uppercase">
+            Đọc Truyện Free
+          </h2>
           <p className="text-gray-600 mb-12 text-[10px] tracking-[0.3em] uppercase">
-            He thong tu dong convert Vietphrase
+            Hệ thống tự động convert Vietphrase
           </p>
 
-          {/* PHẦN CONVERT TRUYỆN CŨNG ĐÃ TÁCH RIÊNG */}
+          {/* CrawlSection sẽ tự động dùng session bên trong nó thông qua useReader */}
           <CrawlSection
             key={resetKey}
             onSearchMode={setIsSearching}
           />
         </div>
 
-        {/* DANH SÁCH TRUYỆN TỪ DATABASE - ẨN KHI ĐANG TÌM KIẾM */}
+        {/* Chỉ hiện danh sách truyện khi không ở chế độ Convert/Search */}
         {!isSearching && (
-          <BooksDisplay />
+          <div className="mt-20">
+             <BooksDisplay />
+          </div>
         )}
       </div>
     </main>
-  )
+  );
 }

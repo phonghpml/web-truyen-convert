@@ -39,3 +39,17 @@ export interface SelectedChapter {
   title: string;
   url: string;
 }
+
+// Thêm vào cuối file web/lib/types.ts
+
+export interface ReadingHistory {
+  _id?: string;
+  userEmail: string;    // Email người dùng từ NextAuth
+  book_url: string;     // Link gốc của bộ truyện (source_url)
+  chapter_url: string;  // Link chương đang đọc dở
+  chapter_title: string; // Tên chương đang đọc dở
+  updated_at: string | Date;
+}
+
+// Interface này dùng để hứng dữ liệu trả về từ API
+export interface HistoryApiResponse extends ApiResponse<ReadingHistory> {}
