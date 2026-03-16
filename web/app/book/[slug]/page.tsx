@@ -9,7 +9,7 @@ import { fetchBook, fetchChapters } from "@/lib/hooks";
 import { useReader } from "@/lib/hooks/useReader"; // Import hook dùng chung
 import { Book, Chapter } from "@/lib/types";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
 
@@ -115,6 +115,7 @@ export default function BookDetailsPage() {
 
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
+       <Suspense fallback={null}>
       <div className="max-w-5xl mx-auto">
         <Navbar session={session} onHomeClick={() => router.push("/")} />
 
@@ -161,6 +162,7 @@ export default function BookDetailsPage() {
           />
         )}
       </div>
+      </Suspense>
     </main>
   );
 }

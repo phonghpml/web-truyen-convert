@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react"; // Thêm để lấy thông tin user
 import { Navbar } from "@/components/layout/Navbar";
 import CrawlSection from "@/components/features/CrawlSection";
@@ -19,7 +19,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
       <div className="max-w-5xl mx-auto">
-        
+
         {/* Truyền session thật vào để Navbar hiện Avatar hoặc nút Đăng xuất */}
         <Navbar session={session} onHomeClick={handleHomeClick} />
 
@@ -32,16 +32,18 @@ export default function Home() {
           </p>
 
           {/* CrawlSection sẽ tự động dùng session bên trong nó thông qua useReader */}
-          <CrawlSection
-            key={resetKey}
-            onSearchMode={setIsSearching}
-          />
+          <Suspense fallback={<div className="text-zinc-500 font-mono text-[10px] animate-pulse">Initializing System...</div>}>
+            <CrawlSection
+              key={resetKey}
+              onSearchMode={setIsSearching}
+            />
+          </Suspense>
         </div>
 
         {/* Chỉ hiện danh sách truyện khi không ở chế độ Convert/Search */}
         {!isSearching && (
           <div className="mt-20">
-             <BooksDisplay />
+            <BooksDisplay />
           </div>
         )}
       </div>
