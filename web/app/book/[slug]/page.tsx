@@ -6,17 +6,17 @@ import { ChapterList } from "@/components/ui/ChapterList";
 import ReaderModal from "@/components/ui/ReaderModal";
 import { MESSAGES } from "@/lib/constants";
 import { fetchBook, fetchChapters } from "@/lib/hooks";
-import { useReader } from "@/lib/hooks/useReader"; // Import hook dùng chung
+import { useReader } from "@/lib/hooks/useReader";
 import { Book, Chapter } from "@/lib/types";
 import { useParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
-
 
 export default function BookDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
+  const { data: session } = useSession();
 
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -25,18 +25,16 @@ export default function BookDetailsPage() {
   const [savedHistory, setSavedHistory] = useState<any>(null);
   const [isSaved, setIsSaved] = useState(false);
 
-  // --- SỬ DỤNG CUSTOM HOOK TỐI ƯU ---
-  const {
-    detailChapter,
-    handleSelect,
-    handleNext,
-    handlePrev,
-    close
-  } = useReader(chapters, book?.source_url || ""); // Truyền source_url để hook có thể cập nhật lịch sử
+  const { detailChapter, handleSelect, handleNext, handlePrev, close } = useReader(
+    chapters,
+    book?.source_url || ""
+  );
 
-  const { data: session } = useSession();
+  // 1. Tối ưu Fetching: Gom nhóm để tránh giật lag UI
   useEffect(() => {
-    const fetchBookData = async () => {
+    if (!slug) return;
+
+    const loadAllData = async () => {
       try {
         setLoading(true);
         const { book: bookData, error: bookError } = await fetchBook(slug);
@@ -45,15 +43,22 @@ export default function BookDetailsPage() {
           setError(bookError || MESSAGES.NO_BOOK_FOUND);
           return;
         }
+
         setBook(bookData);
 
-        if (bookData.source_url) {
-          const { chapters: chaptersData, error: chaptersError } = await fetchChapters(bookData.source_url);
-          if (!chaptersError) {
-            setChapters(chaptersData);
-          }
-        }
-        setError(null);
+        // Fetch đồng thời cả Chapters, History và Library status nếu đã có book data
+        const promises = [
+          bookData.source_url ? fetchChapters(bookData.source_url) : Promise.resolve({ chapters: [] }),
+          bookData.source_url ? fetch(`/api/user/history?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null),
+          (bookData.source_url && session) ? fetch(`/api/user/library?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null)
+        ];
+
+        const [chaptersRes, historyRes, libraryRes] = await Promise.all(promises);
+
+        if (chaptersRes.chapters) setChapters(chaptersRes.chapters);
+        if (historyRes?.success) setSavedHistory(historyRes.data);
+        if (libraryRes) setIsSaved(libraryRes.isSaved);
+
       } catch (err) {
         setError(MESSAGES.ERROR_BOOK_DETAILS);
       } finally {
@@ -61,96 +66,70 @@ export default function BookDetailsPage() {
       }
     };
 
-    if (slug) fetchBookData();
-  }, [slug]);
-
-  useEffect(() => {
-    const getHistory = async () => {
-      if (book?.source_url) {
-        const res = await fetch(`/api/user/history?book_url=${encodeURIComponent(book.source_url)}`);
-        const result = await res.json();
-        console.log("Lịch sử đọc truyện:", result);
-        if (result.success && result.data) {
-          setSavedHistory(result.data);
-        }
-      }
-    };
-    getHistory();
-  }, [book]);
-
-  useEffect(() => {
-    if (book?.source_url && session) {
-      fetch(`/api/user/library?book_url=${encodeURIComponent(book.source_url)}`)
-        .then(res => res.json())
-        .then(data => setIsSaved(data.isSaved));
-    }
-  }, [book, session]);
+    loadAllData();
+  }, [slug, session]); // Chỉ chạy lại khi slug hoặc session thay đổi
 
   const handleSaveToLibrary = async () => {
-  if (!session) return alert("Vui lòng đăng nhập!");
-  
-  const res = await fetch("/api/user/library", {
-    method: "POST",
-    body: JSON.stringify({
-      book_url: book?.source_url,
-      title_vi: book?.title_vi,
-      cover_url: book?.cover_url
-    })
-  });
-  const data = await res.json();
-  setIsSaved(data.isSaved);
-};
+    if (!session) return alert("Vui lòng đăng nhập!");
+    const res = await fetch("/api/user/library", {
+      method: "POST",
+      body: JSON.stringify({
+        book_url: book?.source_url,
+        title_vi: book?.title_vi,
+        cover_url: book?.cover_url
+      })
+    });
+    const data = await res.json();
+    setIsSaved(data.isSaved);
+  };
 
-  if (loading) return (
-    <div className="bg-black min-h-screen flex items-center justify-center text-orange-500 font-mono">
-      Đang tải dữ liệu truyện...
-    </div>
-  );
-
-  if (error) return (
-    <div className="bg-black min-h-screen flex items-center justify-center text-red-500 font-mono">
-      {error}
-    </div>
-  );
+  // Tối ưu: Dùng useMemo để tránh tính toán lại logic tìm chương 1 khi render
+  const firstChapter = useMemo(() => {
+    if (chapters.length === 0) return null;
+    return [...chapters].sort((a, b) =>
+      (a.title_vi.match(/\d+/) || 0) - (b.title_vi.match(/\d+/) || 0)
+    )[0];
+  }, [chapters]);
 
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
-       <Suspense fallback={null}>
       <div className="max-w-5xl mx-auto">
+        {/* Navbar luôn hiển thị, không bị biến mất khi loading */}
         <Navbar session={session} onHomeClick={() => router.push("/")} />
 
         <div className="mt-12 space-y-8">
-          {book &&
-            <BookCard data={book} savedHistory={savedHistory}
-              onReadClick={() => {
-                if (savedHistory) {
-                  // Nếu có lịch sử -> Đọc tiếp chương cũ
-                  handleSelect({
-                    url: savedHistory.chapter_url,
-                    title_vi: savedHistory.chapter_title
-                  });
-                } else if (chapters.length > 0) {
-                  // Nếu chưa có -> Tìm chương 1 (sort tăng dần rồi lấy cái đầu)
-                  const sorted = [...chapters].sort((a, b) =>
-                    (a.title_vi.match(/\d+/) || 0) - (b.title_vi.match(/\d+/) || 0)
-                  );
-                  handleSelect(sorted[0]);
-                }
-              }}
-              isSaved={isSaved}
-              onSaveClick={handleSaveToLibrary}
-            />
-          }
+          {loading ? (
+            // Thay vì return trắng trang, ta hiện loading tại đúng vị trí nội dung
+            <div className="flex flex-col items-center py-20 text-orange-500 animate-pulse">
+              Đang tải dữ liệu truyện...
+            </div>
+          ) : error ? (
+            <div className="text-red-500 py-20 text-center">{error}</div>
+          ) : (
+            <>
+              {book && (
+                <BookCard
+                  data={book}
+                  savedHistory={savedHistory}
+                  onReadClick={() => {
+                    if (savedHistory) {
+                      handleSelect({ url: savedHistory.chapter_url, title_vi: savedHistory.chapter_title });
+                    } else if (firstChapter) {
+                      handleSelect(firstChapter);
+                    }
+                  }}
+                  isSaved={isSaved}
+                  onSaveClick={handleSaveToLibrary}
+                />
+              )}
 
-          {chapters.length > 0 && (
-            <ChapterList
-              chapters={chapters}
-              onSelectChapter={handleSelect} // Dùng hàm từ hook
-            />
+              {chapters.length > 0 && (
+                <ChapterList chapters={chapters} onSelectChapter={handleSelect} />
+              )}
+            </>
           )}
         </div>
 
-        {/* Modal đọc truyện với logic điều hướng từ hook */}
         {detailChapter && (
           <ReaderModal
             isOpen={!!detailChapter}
@@ -162,7 +141,6 @@ export default function BookDetailsPage() {
           />
         )}
       </div>
-      </Suspense>
     </main>
   );
 }
