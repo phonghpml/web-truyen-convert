@@ -23,6 +23,7 @@ export default function BookDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savedHistory, setSavedHistory] = useState<any>(null);
+  const [isSaved, setIsSaved] = useState(false);
 
   // --- SỬ DỤNG CUSTOM HOOK TỐI ƯU ---
   const {
@@ -77,6 +78,29 @@ export default function BookDetailsPage() {
     getHistory();
   }, [book]);
 
+  useEffect(() => {
+    if (book?.source_url && session) {
+      fetch(`/api/user/library?book_url=${encodeURIComponent(book.source_url)}`)
+        .then(res => res.json())
+        .then(data => setIsSaved(data.isSaved));
+    }
+  }, [book, session]);
+
+  const handleSaveToLibrary = async () => {
+  if (!session) return alert("Vui lòng đăng nhập!");
+  
+  const res = await fetch("/api/user/library", {
+    method: "POST",
+    body: JSON.stringify({
+      book_url: book?.source_url,
+      title_vi: book?.title_vi,
+      cover_url: book?.cover_url
+    })
+  });
+  const data = await res.json();
+  setIsSaved(data.isSaved);
+};
+
   if (loading) return (
     <div className="bg-black min-h-screen flex items-center justify-center text-orange-500 font-mono">
       Đang tải dữ liệu truyện...
@@ -112,6 +136,8 @@ export default function BookDetailsPage() {
                   handleSelect(sorted[0]);
                 }
               }}
+              isSaved={isSaved}
+              onSaveClick={handleSaveToLibrary}
             />
           }
 

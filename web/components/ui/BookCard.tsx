@@ -1,7 +1,9 @@
 export const BookCard = ({ data, savedHistory,
-  onReadClick }: {
+  onReadClick, isSaved, onSaveClick }: {
     data: any, savedHistory: any,
-    onReadClick: () => void
+    onReadClick: () => void,
+    isSaved: boolean,
+    onSaveClick: () => void
   }) => (
   <div className="bg-gray-950 border border-orange-500/10 p-6 rounded-3xl flex flex-col md:flex-row gap-8 text-left animate-in fade-in zoom-in duration-500 shadow-2xl">
     <div className="relative group shrink-0">
@@ -45,8 +47,14 @@ export const BookCard = ({ data, savedHistory,
             "Đọc ngay >"
           )}
         </button>
-        <button className="border border-gray-800 text-gray-600 text-[9px] px-6 py-3 rounded-full font-bold hover:bg-gray-900 transition-all uppercase">
-          Lưu tủ sách
+        <button
+          onClick={onSaveClick}
+          className={`border text-[9px] px-6 py-3 rounded-full font-bold transition-all uppercase ${isSaved
+              ? "bg-orange-500 border-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.3)]"
+              : "border-gray-800 text-gray-600 hover:bg-gray-900"
+            }`}
+        >
+          {isSaved ? "✓ Đã lưu" : "Lưu tủ sách"}
         </button>
       </div>
     </div>
