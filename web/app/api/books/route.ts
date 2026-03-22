@@ -1,15 +1,12 @@
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
+import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
-import { MongoClient, ObjectId } from "mongodb";
-
-const MONGODB_URI = process.env.MONGODB_URI!;
-const DB_NAME = "web_truyen";
-const BOOKS_COLLECTION = "books";
-const CHAPTERS_COLLECTION = "chapters";
 
 export async function GET(req: Request) {
   try {
-    const client = await MongoClient.connect(MONGODB_URI);
-    const db = client.db(DB_NAME);
+    const client = await clientPromise;
+    const db = client.db(DB.NAME);
 
     // Lấy danh sách sách với phân trang, hoặc theo source_url/id nếu có
     const url = new URL(req.url);
@@ -18,12 +15,12 @@ export async function GET(req: Request) {
     
     if (sourceUrl) {
       const book = await db
-        .collection(BOOKS_COLLECTION)
+        .collection(DB.BOOKS_COLLECTION)
         .findOne({ source_url: sourceUrl });
       if (book) {
         // cũng thêm trường chapter count
         const chapterCount = await db
-          .collection(CHAPTERS_COLLECTION)
+          .collection(DB.CHAPTERS_COLLECTION)
           .countDocuments({ book_source_url: book.source_url });
         book.chapters_count = chapterCount;
       }
@@ -36,7 +33,7 @@ export async function GET(req: Request) {
       try {
         // Thử query bằng ObjectId trước
         book = await db
-          .collection(BOOKS_COLLECTION)
+          .collection(DB.BOOKS_COLLECTION)
           .findOne({ _id: new ObjectId(bookId) } as any);
       } catch {
         // Nếu không phải ObjectId hợp lệ, skip
@@ -44,7 +41,7 @@ export async function GET(req: Request) {
       
       if (book) {
         const chapterCount = await db
-          .collection(CHAPTERS_COLLECTION)
+          .collection(DB.CHAPTERS_COLLECTION)
           .countDocuments({ book_source_url: book.source_url });
         book.chapters_count = chapterCount;
       }
@@ -56,7 +53,7 @@ export async function GET(req: Request) {
     const skip = parseInt(url.searchParams.get("skip") || "0", 10);
 
     const books = await db
-      .collection(BOOKS_COLLECTION)
+      .collection(DB.BOOKS_COLLECTION)
       .find({})
       .sort({ updated_at: -1 })
       .skip(skip)
@@ -67,7 +64,7 @@ export async function GET(req: Request) {
     const booksWithChapters = await Promise.all(
       books.map(async (book) => {
         const chapterCount = await db
-          .collection(CHAPTERS_COLLECTION)
+          .collection(DB.CHAPTERS_COLLECTION)
           .countDocuments({ book_source_url: book.source_url });
 
         return {
@@ -77,7 +74,7 @@ export async function GET(req: Request) {
       })
     );
 
-    const total = await db.collection(BOOKS_COLLECTION).countDocuments();
+    const total = await db.collection(DB.BOOKS_COLLECTION).countDocuments();
 
     client.close();
 

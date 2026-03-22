@@ -1,15 +1,15 @@
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { MongoClient } from "mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI!;
 
 export async function POST(req: Request) {
   let client;
   try {
     const { source_url, title_vi, cover_url, description_vi, author_vi } = await req.json();
 
-    client = await MongoClient.connect(MONGODB_URI);
-    const db = client.db("web_truyen");
+    client = await clientPromise;
+    const db = client.db(DB.NAME);
 
     // Cập nhật thông tin truyện (Luôn lấy thông tin mới nhất từ Crawler)
     const result = await db.collection("books").updateOne(

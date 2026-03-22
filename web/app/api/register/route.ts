@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
+import clientPromise from "@/lib/mongodb";
 import bcrypt from "bcryptjs";
-import { MongoClient } from "mongodb";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
 
     // 1. Kết nối MongoDB
-    const client = await MongoClient.connect(process.env.MONGODB_URI!);
+    const client = await clientPromise; // Dùng Singleton ở đây
     const db = client.db("web_truyen");
 
     // 2. Kiểm tra user đã tồn tại chưa
@@ -29,8 +29,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "dang ky thanh cong!" }, { status: 201 });
   } catch (error) {
     console.error(error);
-    
 
-return NextResponse.json({ error: "loi ket noi database!" }, { status: 500 });
+
+    return NextResponse.json({ error: "loi ket noi database!" }, { status: 500 });
   }
 }

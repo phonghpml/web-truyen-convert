@@ -28,3 +28,15 @@ export const MESSAGES = {
   ERROR_CONVERT: "Lỗi convert truyện. Kiểm tra lại URL",
   NO_BOOK_FOUND: "Không tìm thấy truyện",
 };
+
+
+// MongoDB Constants
+export const DB = {
+  URI: process.env.MONGODB_URI!,
+  NAME: "web_truyen",
+  BOOKS_COLLECTION: "books",
+  USERS_COLLECTION: "users",
+  CHAPTERS_COLLECTION: "chapters",
+  HISTORY_COLLECTION: "reading_history",
+  LIBRARY_COLLECTION: "user_library",
+}

@@ -1,9 +1,6 @@
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { MongoClient } from "mongodb";
-
-const MONGODB_URI = process.env.MONGODB_URI!;
-const DB_NAME = "web_truyen";
-const CHAPTERS_COLLECTION = "chapters";
 
 export async function GET(req: Request) {
   try {
@@ -16,13 +13,13 @@ export async function GET(req: Request) {
       );
     }
 
-    const client = await MongoClient.connect(MONGODB_URI);
-    const db = client.db(DB_NAME);
+    const client = await clientPromise;
+    const db = client.db(DB.NAME);
 
     // dữ liệu lưu trong collection chỉ có trường "chapter_no" (không phải "index").
     // trước đây sort({ index: 1 }) không có tác dụng nên thứ tự trả về có thể loạn.
     const chapters = await db
-      .collection(CHAPTERS_COLLECTION)
+      .collection(DB.CHAPTERS_COLLECTION)
       .find({ book_source_url: book })
       .sort({ chapter_no: 1 }) // sắp xếp theo số chương tăng dần
       .toArray();

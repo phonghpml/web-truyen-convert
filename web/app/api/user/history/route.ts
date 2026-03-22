@@ -1,10 +1,7 @@
+import { auth } from "@/auth";
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth"; 
-import { MongoClient } from "mongodb";
-
-const MONGODB_URI = process.env.MONGODB_URI!;
-const DB_NAME = "web_truyen";
-const HISTORY_COLLECTION = "reading_history";
 
 export async function POST(req: Request) {
   let client;
@@ -23,9 +20,9 @@ export async function POST(req: Request) {
     }
 
     // 3. Kết nối MongoDB
-    client = await MongoClient.connect(MONGODB_URI);
-    const db = client.db(DB_NAME);
-    const collection = db.collection(HISTORY_COLLECTION);
+    client = await clientPromise;
+    const db = client.db(DB.NAME);
+    const collection = db.collection(DB.HISTORY_COLLECTION);
 
     // 4. Lưu hoặc Cập nhật (Upsert) dựa trên Email và Link truyện
     // Chúng ta dùng book_url (chính là source_url trong file bạn gửi) làm định danh bộ truyện
@@ -66,11 +63,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, data: null });
     }
 
-    client = await MongoClient.connect(MONGODB_URI);
-    const db = client.db(DB_NAME);
+    client = await clientPromise;
+    const db = client.db(DB.NAME);
     
     // Tìm bản ghi mới nhất của người dùng này cho bộ truyện này
-    const history = await db.collection(HISTORY_COLLECTION).findOne({
+    const history = await db.collection(DB.HISTORY_COLLECTION).findOne({
       userEmail: session.user.email,
       book_url: book_url
     });

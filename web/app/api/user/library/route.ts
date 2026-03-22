@@ -1,10 +1,7 @@
+import { auth } from "@/auth";
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth"; 
-import { MongoClient } from "mongodb";
-
-const MONGODB_URI = process.env.MONGODB_URI!;
-const DB_NAME = "web_truyen";
-const LIBRARY_COLLECTION = "user_library";
 
 // API Kiểm tra & Lấy trạng thái tủ sách
 export async function GET(req: Request) {
@@ -14,9 +11,9 @@ export async function GET(req: Request) {
 
   if (!session?.user?.email || !book_url) return NextResponse.json({ isSaved: false });
 
-  const client = await MongoClient.connect(MONGODB_URI);
-  const db = client.db(DB_NAME);
-  const saved = await db.collection(LIBRARY_COLLECTION).findOne({
+  const client = await clientPromise;
+  const db = client.db(DB.NAME);
+  const saved = await db.collection(DB.LIBRARY_COLLECTION).findOne({
     userEmail: session.user.email,
     book_url: book_url
   });
@@ -31,9 +28,9 @@ export async function POST(req: Request) {
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { book_url, title_vi, cover_url } = await req.json();
-  const client = await MongoClient.connect(MONGODB_URI);
-  const db = client.db(DB_NAME);
-  const collection = db.collection(LIBRARY_COLLECTION);
+  const client = await clientPromise;
+  const db = client.db(DB.NAME);
+  const collection = db.collection(DB.LIBRARY_COLLECTION);
 
   const existing = await collection.findOne({ userEmail: session.user.email, book_url });
 

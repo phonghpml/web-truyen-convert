@@ -1,10 +1,8 @@
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { MongoClient } from "mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-const DB_NAME = "web_truyen";
-const BOOKS_COLLECTION = "books";
-const CHAPTERS_COLLECTION = "chapters";
+
 
 export async function GET(req: Request) {
   try {
@@ -18,12 +16,12 @@ export async function GET(req: Request) {
       );
     }
 
-    const client = await MongoClient.connect(MONGODB_URI);
-    const db = client.db(DB_NAME);
+    const client = await clientPromise;
+    const db = client.db(DB.NAME);
 
     // Tìm kiếm theo tên truyện
     const books = await db
-      .collection(BOOKS_COLLECTION)
+      .collection(DB.BOOKS_COLLECTION)
       .find({
         $or: [
           { title_vi: { $regex: query, $options: "i" } },
@@ -37,7 +35,7 @@ export async function GET(req: Request) {
     const booksWithChapters = await Promise.all(
       books.map(async (book) => {
         const chapterCount = await db
-          .collection(CHAPTERS_COLLECTION)
+          .collection(DB.CHAPTERS_COLLECTION)
           .countDocuments({ book_source_url: book.source_url });
 
         return {
