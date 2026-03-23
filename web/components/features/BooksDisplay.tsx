@@ -32,13 +32,13 @@ export default function BooksDisplay() {
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {books.map((book) => {
-          const bookId = book.source_url || book._id;
+          const bookId = book._id;
           if (!bookId) return null;
           
           return (
           <Link
             key={bookId}
-            href={getBookLink(bookId)}
+            href={getBookLink(book.slug)}
           >
             <div 
               className="group cursor-pointer rounded-lg overflow-hidden border border-gray-800 hover:border-orange-500 transition-all duration-300 shadow-lg hover:shadow-orange-500/20"

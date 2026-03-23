@@ -23,8 +23,6 @@ export async function GET(req: Request) {
       .find({ book_source_url: book })
       .sort({ chapter_no: 1 }) // sắp xếp theo số chương tăng dần
       .toArray();
-
-    
     return NextResponse.json({ success: true, data: chapters });
   } catch (error) {
     console.error("Error fetching chapters:", error);

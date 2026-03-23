@@ -7,6 +7,7 @@ export interface User {
 export interface Book {
   _id?: string;
   source_url: string;
+  slug: string;
   title_vi: string;
   title_en?: string;
   cover_url?: string;
@@ -39,7 +40,7 @@ export interface BooksApiResponse extends ApiResponse<Book[]> {
   skip?: number;
 }
 
-export interface ChaptersApiResponse extends ApiResponse<Chapter[]> {}
+export interface ChaptersApiResponse extends ApiResponse<Chapter[]> { }
 
 export interface SelectedChapter {
   title: string;
@@ -58,4 +59,4 @@ export interface ReadingHistory {
 }
 
 // Interface này dùng để hứng dữ liệu trả về từ API
-export interface HistoryApiResponse extends ApiResponse<ReadingHistory> {}
+export interface HistoryApiResponse extends ApiResponse<ReadingHistory> { }

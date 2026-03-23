@@ -46,9 +46,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Lỗi API History:", error);
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
-  } finally {
-    if (client) 
-  }
+  } 
 }
 // Thêm vào bên dưới hàm POST trong file web/app/api/user/history/route.ts
 
@@ -76,7 +74,5 @@ export async function GET(req: Request) {
 
   } catch (error) {
     return NextResponse.json({ success: false, data: null }, { status: 500 });
-  } finally {
-    if (client) 
   }
 }

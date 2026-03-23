@@ -33,7 +33,6 @@ export default function BookDetailsPage() {
   // 1. Tối ưu Fetching: Gom nhóm để tránh giật lag UI
   useEffect(() => {
     if (!slug) return;
-
     const loadAllData = async () => {
       try {
         setLoading(true);

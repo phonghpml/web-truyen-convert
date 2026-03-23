@@ -27,8 +27,6 @@ export default function SearchPage() {
       try {
         setLoading(true);
         const decodedQuery = decodeBookId(query);
-        console.log("Searching for:", decodedQuery);
-
         const { books, error: searchError } = await searchBooks(decodedQuery);
 
         if (searchError) {

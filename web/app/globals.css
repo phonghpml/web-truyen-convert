@@ -1,26 +1,57 @@
 @import "tailwindcss";
 
+/* 1. Cấu hình màu sắc Dark Mode làm chủ đạo cho Web Truyện */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #000000; /* Đen sâu */
+  --foreground: #e4e4e7; /* Trắng xám (giảm mỏi mắt) */
+  --accent: #f97316;     /* Màu cam thương hiệu */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--accent);
+  
+  /* 2. ÉP HỆ THỐNG DÙNG FONT CHUẨN UNICODE */
+  /* Thay Geist bằng bộ font hệ thống ổn định nhất cho Tiếng Việt */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'ui-monospace', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* 3. Tối ưu hiển thị cho Body */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  
+  /* Sửa lỗi lệch dấu bằng cách dùng bộ font không chân hiện đại */
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  
+  /* Giúp chữ sắc nét và mượt hơn trên Linux/Xubuntu */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  
+  /* Tăng khoảng cách dòng một chút để đọc truyện không bị dính dấu */
+  line-height: 1.6;
+}
+
+/* 4. Sửa lỗi hiển thị trong các ô nhập liệu (Input/Button) */
+input, button, textarea, select {
+  font-family: inherit; /* Kế thừa font Inter ở trên để không bị lỗi dấu */
+  letter-spacing: 0.01em; 
+}
+
+/* Tùy chỉnh thanh cuộn cho hợp với giao diện Dark/Orange */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }

@@ -17,7 +17,5 @@ export async function GET() {
     .find({ userEmail: session.user.email })
     .sort({ created_at: -1 })
     .toArray();
-
-  await 
   return NextResponse.json({ data: library });
 }

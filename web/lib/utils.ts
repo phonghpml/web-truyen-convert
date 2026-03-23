@@ -2,6 +2,8 @@
  * URL utilities
  */
 
+import slugify from "slugify";
+
 /**
  * Encode book identifier for URL
  */
@@ -19,15 +21,15 @@ export const decodeBookId = (id: string): string => {
 /**
  * Get book link
  */
-export const getBookLink = (bookId: string): string => {
-  return `/book/${encodeBookId(bookId)}`;
+export const getBookLink = (slug: string): string => {
+  return `/book/${encodeBookId(slug)}`;
 };
 
 /**
  * Get search link
  */
 export const getSearchLink = (query: string): string => {
-  return `/search/${encodeBookId(query)}`;
+  return `/search/${encodeURIComponent(query)}`;
 };
 
 /**
@@ -42,14 +44,18 @@ export const isValidUrl = (str: string): boolean => {
   }
 };
 
-/**
- * Get book identifier (priority: source_url > _id)
- */
-export const getBookId = (book: { source_url?: string; _id?: string }): string | null => {
-  return book.source_url || book._id || null;
-};
-
 export const parseChapterNum = (title: string): number => {
   const m = title.match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[0]) : 0;
+};
+
+export const generateSlug = (text: string) => {
+  return slugify(text, {
+    replacement: "-",  // Thay khoảng trắng bằng -
+    remove: /[*+~.()'"!:@]/g, // Loại bỏ ký tự đặc biệt
+    lower: true,      // Chuyển về chữ thường
+    strict: true,     // Loại bỏ các ký tự không phải alphabet
+    locale: "vi",     // Chế độ tiếng Việt (quan trọng)
+    trim: true,       // Xóa khoảng trắng đầu cuối
+  });
 };

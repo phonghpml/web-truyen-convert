@@ -8,7 +8,7 @@ export async function GET(req: Request) {
     const client = await clientPromise;
     const db = client.db(DB.NAME);
 
-    // Lấy danh sách sách với phân trang, hoặc theo source_url/id nếu có
+    // Lấy danh sách sách với phân trang, hoặc theo id nếu có
     const url = new URL(req.url);
     const sourceUrl = url.searchParams.get("source_url");
     const bookId = url.searchParams.get("id");
