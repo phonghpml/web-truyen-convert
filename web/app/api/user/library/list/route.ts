@@ -18,6 +18,6 @@ export async function GET() {
     .sort({ created_at: -1 })
     .toArray();
 
-  await client.close();
+  await 
   return NextResponse.json({ data: library });
 }

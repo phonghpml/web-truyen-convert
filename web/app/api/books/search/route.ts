@@ -45,7 +45,7 @@ export async function GET(req: Request) {
       })
     );
 
-    client.close();
+    
 
     return NextResponse.json({
       success: true,

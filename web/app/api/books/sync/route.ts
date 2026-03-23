@@ -30,6 +30,6 @@ export async function POST(req: Request) {
   } catch (error) {
     return NextResponse.json({ success: false }, { status: 500 });
   } finally {
-    if (client) client.close();
+    if (client) 
   }
 }

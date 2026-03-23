@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     book_url: book_url
   });
   
-  await client.close();
+  await 
   return NextResponse.json({ isSaved: !!saved });
 }
 
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
   if (existing) {
     await collection.deleteOne({ _id: existing._id });
-    await client.close();
+    await 
     return NextResponse.json({ isSaved: false, message: "Đã xóa khỏi tủ sách" });
   } else {
     await collection.insertOne({
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       cover_url,
       created_at: new Date()
     });
-    await client.close();
+    await 
     return NextResponse.json({ isSaved: true, message: "Đã lưu vào tủ sách" });
   }
 }

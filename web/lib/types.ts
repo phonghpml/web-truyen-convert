@@ -1,3 +1,9 @@
+export interface User {
+  _id?: string;
+  email: string;
+  password: string; // Lưu hash mật khẩu
+}
+
 export interface Book {
   _id?: string;
   source_url: string;

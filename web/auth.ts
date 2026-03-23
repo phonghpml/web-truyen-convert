@@ -1,29 +1,47 @@
+import { DB } from "@/lib/constants";
+import clientPromise from "@/lib/mongodb";
+import bcrypt from "bcryptjs";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import clientPromise from "@/lib/mongodb";
-import { DB } from "./lib/constants";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        console.log("--- BẮT ĐẦU KIỂM TRA ĐĂNG NHẬP ---");
+        try {
+          const client = await clientPromise;
+          console.log("MongoDB Client đã kết nối thành công", client);
+          if (!client) {
+            throw new Error("Không thể khởi tạo MongoDB Client");
+          }
 
-        const client = await clientPromise;
-        const user = await client
-          .db(DB.NAME)
-          .collection(DB.USERS_COLLECTION)
-          .findOne({ email: credentials.email });
+          const db = client.db(DB.NAME);
+          console.log("Đã kết nối đến database:", db);
+          const user = await db
+            .collection(DB.USERS_COLLECTION)
+            .findOne({ email: credentials.email as string });
 
-        if (user && bcrypt.compareSync(credentials.password as string, user.password)) {
-          return { id: user._id.toString(), email: user.email, name: user.name };
+          if (!user) {
+            console.log("LỖI: Không tìm thấy User");
+            return null;
+          }
+          
+          console.log("User tìm thấy:", { email: user.email, name: user.password });
+          const isMatch = await bcrypt.compare(credentials.password as string, user.password);
+          if (isMatch) {
+            console.log("--- ĐĂNG NHẬP THÀNH CÔNG ---");
+            return { id: user._id.toString(), email: user.email, name: user.name };
+          }
+        } catch (error: any) {
+          console.error("LỖI HỆ THỐNG CỤ THỂ:", error.message);
         }
         return null;
       },
+
+
     }),
   ],
-  // Tối ưu session để giảm tải DB
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
 });

@@ -24,7 +24,7 @@ export async function GET(req: Request) {
       .sort({ chapter_no: 1 }) // sắp xếp theo số chương tăng dần
       .toArray();
 
-    client.close();
+    
     return NextResponse.json({ success: true, data: chapters });
   } catch (error) {
     console.error("Error fetching chapters:", error);

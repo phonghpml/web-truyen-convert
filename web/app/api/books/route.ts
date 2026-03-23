@@ -24,7 +24,7 @@ export async function GET(req: Request) {
           .countDocuments({ book_source_url: book.source_url });
         book.chapters_count = chapterCount;
       }
-      client.close();
+      
       return NextResponse.json({ success: true, data: book ? [book] : [] });
     }
     
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
           .countDocuments({ book_source_url: book.source_url });
         book.chapters_count = chapterCount;
       }
-      client.close();
+      
       return NextResponse.json({ success: true, data: book ? [book] : [] });
     }
 
@@ -76,7 +76,7 @@ export async function GET(req: Request) {
 
     const total = await db.collection(DB.BOOKS_COLLECTION).countDocuments();
 
-    client.close();
+    
 
     return NextResponse.json({
       success: true,
