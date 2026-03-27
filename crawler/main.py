@@ -9,6 +9,8 @@ import edge_tts # Thêm dòng này
 import re # Thêm dòng này
 from datetime import datetime
 from contextlib import asynccontextmanager
+from slugify import slugify
+import random
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +43,13 @@ def format_chapter_url(url: str) -> str:
         return url + "/"
     return url
 
+
+def generate_unique_slug(title: str) -> str:
+    base_slug = slugify(title)
+    suffix = str(random.randint(1000, 9999))  # 4 số ngẫu nhiên
+    return f"{base_slug}-{suffix}"
+
+
 # --- CÁC API ENDPOINTS GIỮ NGUYÊN ---
 
 @app.post("/get-basic-info")
@@ -57,7 +66,8 @@ async def api_get_info(request: TranslationRequest):
             "description_vi": tr.translate_text(raw.get('description_cn', ''), limit=1000),
             "cover_url": raw.get('cover_url', ''),
             "status": "info_only",
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
+            "slug": generate_unique_slug(tr.translate_text(raw.get('title_cn', '')))
         }
         db_mod.save_book(book_data)
         return {"success": True, "data": book_data}

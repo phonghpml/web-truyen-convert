@@ -78,7 +78,7 @@ export async function fetchBook(
 
     // Try by source_url first
     let response = await fetch(
-      `${ENDPOINTS.BOOKS}?source_url=${encodeURIComponent(decodedSlug)}`
+      `${ENDPOINTS.BOOKS}?slug=${encodeURIComponent(decodedSlug)}`
     );
     let data: ApiResponse<Book[]> = await response.json();
 

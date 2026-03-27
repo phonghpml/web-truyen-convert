@@ -2,8 +2,6 @@
  * URL utilities
  */
 
-import slugify from "slugify";
-
 /**
  * Encode book identifier for URL
  */
@@ -47,15 +45,4 @@ export const isValidUrl = (str: string): boolean => {
 export const parseChapterNum = (title: string): number => {
   const m = title.match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[0]) : 0;
-};
-
-export const generateSlug = (text: string) => {
-  return slugify(text, {
-    replacement: "-",  // Thay khoảng trắng bằng -
-    remove: /[*+~.()'"!:@]/g, // Loại bỏ ký tự đặc biệt
-    lower: true,      // Chuyển về chữ thường
-    strict: true,     // Loại bỏ các ký tự không phải alphabet
-    locale: "vi",     // Chế độ tiếng Việt (quan trọng)
-    trim: true,       // Xóa khoảng trắng đầu cuối
-  });
 };

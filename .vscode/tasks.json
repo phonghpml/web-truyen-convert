@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run FastAPI Server",
+      "type": "shell",
+      "command": "python -m uvicorn main:app --reload",
+      "options": {
+        "cwd": "${workspaceFolder}/crawler"
+      },
+      "presentation": {
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Run Web Frontend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      },
+      "presentation": {
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Run Both",
+      "dependsOn": [
+        "Run FastAPI Server",
+        "Run Web Frontend"
+      ],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
