@@ -7,13 +7,12 @@ export const BookCard = ({ data, savedHistory,
     isSaved: boolean,
     onSaveClick: () => void
   }) => {
-  // State để kiểm soát việc đóng/mở phần giới thiệu
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div className="bg-gray-950 border border-orange-500/10 p-4 md:p-6 rounded-3xl flex flex-row gap-4 md:gap-8 text-left animate-in fade-in zoom-in duration-500 shadow-2xl items-start">
       
-      {/* 1. Phần ảnh: Thu nhỏ trên mobile (w-24), bình thường trên desktop (md:w-40) */}
+      {/* 1. Phần ảnh: Thu nhỏ trên mobile, giữ nguyên trên desktop */}
       <div className="relative group shrink-0 sticky top-0">
         <div className="absolute -inset-1 bg-orange-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
         <img
@@ -23,11 +22,13 @@ export const BookCard = ({ data, savedHistory,
         />
       </div>
 
-      {/* 2. Phần nội dung: Luôn nằm ngang hàng với ảnh */}
+      {/* 2. Phần nội dung: Tên truyện hiển thị đầy đủ */}
       <div className="flex-1 py-1 md:py-2 min-w-0">
-        <h3 className="font-black text-orange-500 text-xl md:text-3xl mb-1 uppercase italic tracking-tighter leading-tight truncate">
+        {/* THAY ĐỔI: Bỏ class 'truncate', thêm 'whitespace-normal' để tự động xuống dòng khi tên quá dài */}
+        <h3 className="font-black text-orange-500 text-xl md:text-3xl mb-1 uppercase italic tracking-tighter leading-tight whitespace-normal break-words">
           {data.title_vi}
         </h3>
+        
         <p className="text-[9px] md:text-[10px] text-gray-500 mb-4 md:mb-6 font-bold tracking-[0.1em] md:tracking-[0.2em] uppercase">
           Tác giả: <span className="text-gray-300">{data.author_vi}</span>
         </p>
@@ -40,7 +41,6 @@ export const BookCard = ({ data, savedHistory,
               {data.description_vi}
             </p>
             
-            {/* Nút Xem thêm / Thu gọn */}
             {data.description_vi?.length > 100 && (
               <button 
                 onClick={() => setIsExpanded(!isExpanded)}
