@@ -8,6 +8,7 @@ interface ReaderModalProps {
   onClose: () => void;
   chapterTitle: string;
   chapterUrl: string;
+  chapterSlug?: string;
   onNextChapter?: () => void;
   onPrevChapter?: () => void;
 }
@@ -16,7 +17,8 @@ export default function ReaderModal({
   isOpen, 
   onClose, 
   chapterTitle, 
-  chapterUrl, 
+  chapterUrl,
+  chapterSlug,
   onNextChapter, 
   onPrevChapter 
 }: ReaderModalProps) {

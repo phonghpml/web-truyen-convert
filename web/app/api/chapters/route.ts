@@ -20,7 +20,12 @@ export async function GET(req: Request) {
     // trước đây sort({ index: 1 }) không có tác dụng nên thứ tự trả về có thể loạn.
     const chapters = await db
       .collection(DB.CHAPTERS_COLLECTION)
-      .find({ book_source_url: book })
+      .find({ book_source_url: book }, {
+        projection: {
+          content: 0,        // KHÔNG lấy nội dung (để API nhẹ hơn)
+          _id: 0             // Có thể ẩn _id nếu không dùng ở Frontend
+        }
+      })
       .sort({ chapter_no: 1 }) // sắp xếp theo số chương tăng dần
       .toArray();
     return NextResponse.json({ success: true, data: chapters });

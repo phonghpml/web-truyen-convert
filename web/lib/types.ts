@@ -18,9 +18,14 @@ export interface Book {
 }
 
 export interface Chapter {
+  _id?: string;
   title: string;
   url: string;
   [key: string]: any;
+  slug: string;
+  chapter_no: number;
+  updated_at?: string;
+  book_source_url?: string;
 }
 
 export interface ChapterDetail extends Chapter {
@@ -53,7 +58,7 @@ export interface ReadingHistory {
   _id?: string;
   userEmail: string;    // Email người dùng từ NextAuth
   book_url: string;     // Link gốc của bộ truyện (source_url)
-  chapter_url: string;  // Link chương đang đọc dở
+  chapter_slug: string;  // Slug chương đang đọc dở
   chapter_title: string; // Tên chương đang đọc dở
   updated_at: string | Date;
 }

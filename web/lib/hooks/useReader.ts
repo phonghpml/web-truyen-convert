@@ -10,22 +10,22 @@ export function useReader(chapters: any[], bookUrl?: string) {
 
   const [readingList, setReadingList] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
-  const [detailChapter, setDetailChapter] = useState<{ title: string; url: string } | null>(null);
+  const [detailChapter, setDetailChapter] = useState<{ title: string; slug: string, url: string; } | null>(null);
 
   // 1. Tự động sắp xếp và kiểm tra Deep Link
   useEffect(() => {
     if (chapters.length > 0) {
-      const sorted = [...chapters].sort((a, b) => 
+      const sorted = [...chapters].sort((a, b) =>
         parseChapterNum(a.title_vi || "") - parseChapterNum(b.title_vi || "")
       );
       setReadingList(sorted);
 
-      const chUrl = searchParams.get("ch");
-      if (chUrl) {
-        const idx = sorted.findIndex(c => c.url === chUrl);
+      const chSlug = searchParams.get("ch");
+      if (chSlug) {
+        const idx = sorted.findIndex(c => c.slug === chSlug);
         if (idx !== -1) {
           setCurrentIndex(idx);
-          setDetailChapter({ title: sorted[idx].title_vi, url: sorted[idx].url });
+          setDetailChapter({ title: sorted[idx].title_vi, slug: sorted[idx].slug, url: sorted[idx].url });
         }
       }
     }
@@ -42,6 +42,7 @@ export function useReader(chapters: any[], bookUrl?: string) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               book_url: bookUrl,
+              chapter_slug: detailChapter.slug,
               chapter_url: detailChapter.url,
               chapter_title: detailChapter.title,
             }),
@@ -57,26 +58,26 @@ export function useReader(chapters: any[], bookUrl?: string) {
     }
   }, [detailChapter, bookUrl]);
 
-  const updateUrl = useCallback((url: string | null) => {
+  const updateUrl = useCallback((slug: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (url) params.set("ch", url); else params.delete("ch");
+    if (slug) params.set("ch", slug); else params.delete("ch");
     const query = params.toString();
     router.push(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }, [pathname, router, searchParams]);
 
   const handleSelect = (chapter: any) => {
-    const idx = readingList.findIndex(c => c.url === chapter.url);
+    const idx = readingList.findIndex(c => c.slug === chapter.slug);
     setCurrentIndex(idx);
-    setDetailChapter({ title: chapter.title_vi, url: chapter.url });
-    updateUrl(chapter.url);
+    setDetailChapter({ title: chapter.title_vi, slug: chapter.slug, url: chapter.url });
+    updateUrl(chapter.slug);
   };
 
   const handleNext = () => {
     if (currentIndex < readingList.length - 1) {
       const next = readingList[currentIndex + 1];
       setCurrentIndex(prev => prev + 1);
-      setDetailChapter({ title: next.title_vi, url: next.url });
-      updateUrl(next.url);
+      setDetailChapter({ title: next.title_vi, slug: next.slug, url: next.url });
+      updateUrl(next.slug);
     }
   };
 
@@ -84,8 +85,8 @@ export function useReader(chapters: any[], bookUrl?: string) {
     if (currentIndex > 0) {
       const prev = readingList[currentIndex - 1];
       setCurrentIndex(prev => prev - 1);
-      setDetailChapter({ title: prev.title_vi, url: prev.url });
-      updateUrl(prev.url);
+      setDetailChapter({ title: prev.title_vi, slug: prev.slug, url: prev.url });
+      updateUrl(prev.slug);
     }
   };
 

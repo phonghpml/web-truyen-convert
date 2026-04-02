@@ -8,9 +8,9 @@ import { MESSAGES } from "@/lib/constants";
 import { fetchBook, fetchChapters } from "@/lib/hooks";
 import { useReader } from "@/lib/hooks/useReader";
 import { Book, Chapter } from "@/lib/types";
-import { useParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 export default function BookDetailsPage() {
   const params = useParams();
@@ -112,7 +112,12 @@ export default function BookDetailsPage() {
                   savedHistory={savedHistory}
                   onReadClick={() => {
                     if (savedHistory) {
-                      handleSelect({ url: savedHistory.chapter_url, title_vi: savedHistory.chapter_title });
+                      handleSelect(
+                        {
+                          url: savedHistory.chapter_url,
+                          title_vi: savedHistory.chapter_title,
+                          slug: savedHistory.chapter_slug
+                        });
                     } else if (firstChapter) {
                       handleSelect(firstChapter);
                     }
@@ -134,9 +139,10 @@ export default function BookDetailsPage() {
             isOpen={!!detailChapter}
             onClose={close}
             chapterTitle={detailChapter.title || "Chương không tên"}
-            chapterUrl={detailChapter.url}
+            chapterSlug={detailChapter.slug}
             onNextChapter={handleNext}
             onPrevChapter={handlePrev}
+            chapterUrl={detailChapter.url}
           />
         )}
       </div>

@@ -86,7 +86,8 @@ async def api_get_chapters(request: TranslationRequest):
             translated_chapters.append({
                 "chapter_no": index + 1,
                 "title_vi": tr.translate_text(ch.get('title_cn', '')),
-                "url": ch.get('url', '')
+                "url": ch.get('url', ''),
+                "slug": generate_unique_slug(tr.translate_text(ch.get('title_cn', '')))
             })
         db_mod.save_chapters(request.url, translated_chapters)
         return {"success": True, "total": len(translated_chapters), "chapters": translated_chapters}
