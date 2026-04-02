@@ -10,7 +10,7 @@ import { useReader } from "@/lib/hooks/useReader";
 import { Book, Chapter } from "@/lib/types";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 
 export default function BookDetailsPage() {
   const params = useParams();
@@ -21,6 +21,7 @@ export default function BookDetailsPage() {
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false); 
   const [error, setError] = useState<string | null>(null);
   const [savedHistory, setSavedHistory] = useState<any>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -30,43 +31,65 @@ export default function BookDetailsPage() {
     book?.source_url || ""
   );
 
-  // 1. Tối ưu Fetching: Gom nhóm để tránh giật lag UI
-  useEffect(() => {
+  const loadAllData = useCallback(async (showGlobalLoading = true) => {
     if (!slug) return;
-    const loadAllData = async () => {
-      try {
-        setLoading(true);
-        const { book: bookData, error: bookError } = await fetchBook(slug);
+    try {
+      if (showGlobalLoading) setLoading(true);
+      const { book: bookData, error: bookError } = await fetchBook(slug);
 
-        if (bookError || !bookData) {
-          setError(bookError || MESSAGES.NO_BOOK_FOUND);
-          return;
-        }
-
-        setBook(bookData);
-
-        // Fetch đồng thời cả Chapters, History và Library status nếu đã có book data
-        const promises = [
-          bookData.source_url ? fetchChapters(bookData.source_url) : Promise.resolve({ chapters: [] }),
-          bookData.source_url ? fetch(`/api/user/history?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null),
-          (bookData.source_url && session) ? fetch(`/api/user/library?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null)
-        ];
-
-        const [chaptersRes, historyRes, libraryRes] = await Promise.all(promises);
-
-        if (chaptersRes.chapters) setChapters(chaptersRes.chapters);
-        if (historyRes?.success) setSavedHistory(historyRes.data);
-        if (libraryRes) setIsSaved(libraryRes.isSaved);
-
-      } catch (err) {
-        setError(MESSAGES.ERROR_BOOK_DETAILS);
-      } finally {
-        setLoading(false);
+      if (bookError || !bookData) {
+        setError(bookError || MESSAGES.NO_BOOK_FOUND);
+        return;
       }
-    };
 
+      setBook(bookData);
+
+      const promises = [
+        bookData.source_url ? fetchChapters(bookData.source_url) : Promise.resolve({ chapters: [] }),
+        bookData.source_url ? fetch(`/api/user/history?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null),
+        (bookData.source_url && session) ? fetch(`/api/user/library?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null)
+      ];
+
+      const [chaptersRes, historyRes, libraryRes] = await Promise.all(promises);
+
+      if (chaptersRes.chapters) setChapters(chaptersRes.chapters);
+      if (historyRes?.success) setSavedHistory(historyRes.data);
+      if (libraryRes) setIsSaved(libraryRes.isSaved);
+
+    } catch (err) {
+      setError(MESSAGES.ERROR_BOOK_DETAILS);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug, session]);
+
+  useEffect(() => {
     loadAllData();
-  }, [slug, session]); // Chỉ chạy lại khi slug hoặc session thay đổi
+  }, [loadAllData]);
+
+  const handleSyncChapters = async () => {
+    if (!book?.source_url) return;
+    
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_CRAWLER_URL}/get-chapters`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: book.source_url })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        await loadAllData(false);
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
+      alert("Lỗi khi kết nối với máy chủ cập nhật.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleSaveToLibrary = async () => {
     if (!session) return alert("Vui lòng đăng nhập!");
@@ -82,7 +105,6 @@ export default function BookDetailsPage() {
     setIsSaved(data.isSaved);
   };
 
-  // Tối ưu: Dùng useMemo để tránh tính toán lại logic tìm chương 1 khi render
   const firstChapter = useMemo(() => {
     if (chapters.length === 0) return null;
     return [...chapters].sort((a, b) =>
@@ -91,44 +113,62 @@ export default function BookDetailsPage() {
   }, [chapters]);
 
   return (
-    <main className="min-h-screen bg-black text-white font-mono p-6">
-      <div className="max-w-5xl mx-auto">
-        {/* Navbar luôn hiển thị, không bị biến mất khi loading */}
+    <main className="min-h-screen bg-black text-white font-mono p-4 md:p-6">
+      <div className="max-w-5xl mx-auto w-full">
         <Navbar session={session} onHomeClick={() => router.push("/")} />
 
-        <div className="mt-12 space-y-8">
+        <div className="mt-8 md:mt-12 space-y-6 md:space-y-8">
           {loading ? (
-            // Thay vì return trắng trang, ta hiện loading tại đúng vị trí nội dung
-            <div className="flex flex-col items-center py-20 text-orange-500 animate-pulse">
+            <div className="flex flex-col items-center py-20 text-orange-500 animate-pulse text-sm">
               Đang tải dữ liệu truyện...
             </div>
           ) : error ? (
-            <div className="text-red-500 py-20 text-center">{error}</div>
+            <div className="text-red-500 py-20 text-center text-sm">{error}</div>
           ) : (
             <>
               {book && (
-                <BookCard
-                  data={book}
-                  savedHistory={savedHistory}
-                  onReadClick={() => {
-                    if (savedHistory) {
-                      handleSelect(
-                        {
-                          url: savedHistory.chapter_url,
-                          title_vi: savedHistory.chapter_title,
-                          slug: savedHistory.chapter_slug
-                        });
-                    } else if (firstChapter) {
-                      handleSelect(firstChapter);
-                    }
-                  }}
-                  isSaved={isSaved}
-                  onSaveClick={handleSaveToLibrary}
-                />
+                <div className="relative flex flex-col items-end">
+                  <div className="w-full">
+                    <BookCard
+                      data={book}
+                      savedHistory={savedHistory}
+                      onReadClick={() => {
+                        if (savedHistory) {
+                          handleSelect({
+                            url: savedHistory.chapter_url,
+                            title_vi: savedHistory.chapter_title,
+                            slug: savedHistory.chapter_slug
+                          });
+                        } else if (firstChapter) {
+                          handleSelect(firstChapter);
+                        }
+                      }}
+                      isSaved={isSaved}
+                      onSaveClick={handleSaveToLibrary}
+                    />
+                  </div>
+                  
+                  {/* Nút Cập nhật - Responsive position */}
+                  <div className="mt-2 md:mt-0 md:absolute md:top-4 md:right-4 z-10">
+                    <button
+                      onClick={handleSyncChapters}
+                      disabled={isUpdating}
+                      className={`text-[9px] md:text-[10px] border px-2 py-1 uppercase tracking-tighter transition-all ${
+                        isUpdating 
+                          ? "opacity-50 border-gray-500 text-gray-500" 
+                          : "border-orange-500/50 text-orange-500/50 hover:opacity-100 hover:border-orange-500 hover:text-orange-500 bg-black/50 backdrop-blur-sm"
+                      }`}
+                    >
+                      {isUpdating ? "Syncing..." : "[ Update Chapters ]"}
+                    </button>
+                  </div>
+                </div>
               )}
 
               {chapters.length > 0 && (
-                <ChapterList chapters={chapters} onSelectChapter={handleSelect} />
+                <div className="w-full overflow-hidden">
+                  <ChapterList chapters={chapters} onSelectChapter={handleSelect} />
+                </div>
               )}
             </>
           )}
@@ -138,7 +178,7 @@ export default function BookDetailsPage() {
           <ReaderModal
             isOpen={!!detailChapter}
             onClose={close}
-            chapterTitle={detailChapter.title || "Chương không tên"}
+            chapterTitle={(detailChapter as any).title_vi || detailChapter.title || "Chương không tên"}
             chapterSlug={detailChapter.slug}
             onNextChapter={handleNext}
             onPrevChapter={handlePrev}
