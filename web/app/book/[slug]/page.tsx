@@ -3,14 +3,13 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { BookCard } from "@/components/ui/BookCard";
 import { ChapterList } from "@/components/ui/ChapterList";
-import ReaderModal from "@/components/ui/ReaderModal";
+// BỎ: import ReaderModal from "@/components/ui/ReaderModal"; 
 import { MESSAGES } from "@/lib/constants";
 import { fetchBook, fetchChapters } from "@/lib/hooks";
-import { useReader } from "@/lib/hooks/useReader";
 import { Book, Chapter } from "@/lib/types";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 
 export default function BookDetailsPage() {
   const params = useParams();
@@ -26,10 +25,17 @@ export default function BookDetailsPage() {
   const [savedHistory, setSavedHistory] = useState<any>(null);
   const [isSaved, setIsSaved] = useState(false);
 
-  const { detailChapter, handleSelect, handleNext, handlePrev, close } = useReader(
-    chapters,
-    book?.source_url || ""
-  );
+  // THAY THẾ: Logic handleSelect mới để chuyển hướng thay vì mở Modal
+  const handleSelect = useCallback((chapter: Chapter) => {
+    if (!chapter.url) return;
+    
+    // 1. Lưu danh sách chương vào localStorage để trang [chapter_slug] dùng tính Next/Prev
+    localStorage.setItem(`chapters_${slug}`, JSON.stringify(chapters));
+    
+    // 2. Chuyển hướng kèm theo URL gốc ở query để Backend cào dữ liệu
+    const encodedUrl = encodeURIComponent(chapter.url);
+    router.push(`/book/${slug}/${chapter.slug}?url=${encodedUrl}`);
+  }, [chapters, slug, router]);
 
   const loadAllData = useCallback(async (showGlobalLoading = true) => {
     if (!slug) return;
@@ -69,7 +75,6 @@ export default function BookDetailsPage() {
 
   const handleSyncChapters = async () => {
     if (!book?.source_url) return;
-    
     setIsUpdating(true);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_CRAWLER_URL}/get-chapters`, {
@@ -77,14 +82,9 @@ export default function BookDetailsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: book.source_url })
       });
-
       const data = await response.json();
-      
-      if (data.success) {
-        await loadAllData(false);
-      }
+      if (data.success) await loadAllData(false);
     } catch (err) {
-      console.error("Sync error:", err);
       alert("Lỗi khi kết nối với máy chủ cập nhật.");
     } finally {
       setIsUpdating(false);
@@ -138,7 +138,7 @@ export default function BookDetailsPage() {
                             url: savedHistory.chapter_url,
                             title_vi: savedHistory.chapter_title,
                             slug: savedHistory.chapter_slug
-                          });
+                          } as any);
                         } else if (firstChapter) {
                           handleSelect(firstChapter);
                         }
@@ -147,16 +147,12 @@ export default function BookDetailsPage() {
                       onSaveClick={handleSaveToLibrary}
                     />
                   </div>
-                  
-                  {/* Nút Cập nhật - Responsive position */}
                   <div className="mt-2 md:mt-0 md:absolute md:top-4 md:right-4 z-10">
                     <button
                       onClick={handleSyncChapters}
                       disabled={isUpdating}
                       className={`text-[9px] md:text-[10px] border px-2 py-1 uppercase tracking-tighter transition-all ${
-                        isUpdating 
-                          ? "opacity-50 border-gray-500 text-gray-500" 
-                          : "border-orange-500/50 text-orange-500/50 hover:opacity-100 hover:border-orange-500 hover:text-orange-500 bg-black/50 backdrop-blur-sm"
+                        isUpdating ? "opacity-50 border-gray-500 text-gray-500" : "border-orange-500/50 text-orange-500/50 hover:opacity-100 hover:border-orange-500 hover:text-orange-500 bg-black/50"
                       }`}
                     >
                       {isUpdating ? "Syncing..." : "[ Update Chapters ]"}
@@ -174,17 +170,7 @@ export default function BookDetailsPage() {
           )}
         </div>
 
-        {detailChapter && (
-          <ReaderModal
-            isOpen={!!detailChapter}
-            onClose={close}
-            chapterTitle={(detailChapter as any).title_vi || detailChapter.title || "Chương không tên"}
-            chapterSlug={detailChapter.slug}
-            onNextChapter={handleNext}
-            onPrevChapter={handlePrev}
-            chapterUrl={detailChapter.url}
-          />
-        )}
+        {/* BỎ: ReaderModal component ở đây */}
       </div>
     </main>
   );
