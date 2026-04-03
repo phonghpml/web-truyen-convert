@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+// Ảnh mặc định khi cover_url rỗng hoặc bị lỗi
+const DEFAULT_COVER = "https://placehold.co/400x600/111/f97316?text=No+Cover";
+
 export const BookCard = ({ data, savedHistory,
   onReadClick, isSaved, onSaveClick }: {
     data: any, savedHistory: any,
@@ -12,33 +15,40 @@ export const BookCard = ({ data, savedHistory,
   return (
     <div className="bg-gray-950 border border-orange-500/10 p-4 md:p-6 rounded-3xl flex flex-row gap-4 md:gap-8 text-left animate-in fade-in zoom-in duration-500 shadow-2xl items-start">
       
-      {/* 1. Phần ảnh: Thu nhỏ trên mobile, giữ nguyên trên desktop */}
+      {/* 1. Phần ảnh: Xử lý lỗi src rỗng và link die */}
       <div className="relative group shrink-0 sticky top-0">
         <div className="absolute -inset-1 bg-orange-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
         <img
-          src={data.cover_url}
+          // SỬA LỖI: Nếu src rỗng thì dùng DEFAULT_COVER để tránh download whole page
+          src={data.cover_url || DEFAULT_COVER}
           className="relative w-24 h-36 md:w-40 md:h-56 object-cover rounded-lg border border-gray-800 shadow-2xl transition-all"
-          alt="cover"
+          alt={data.title_vi || "book cover"}
+          // SỬA LỖI: Nếu link ảnh bị lỗi 404, thay thế bằng ảnh mặc định
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            if (target.src !== DEFAULT_COVER) {
+              target.src = DEFAULT_COVER;
+            }
+          }}
         />
       </div>
 
-      {/* 2. Phần nội dung: Tên truyện hiển thị đầy đủ */}
+      {/* 2. Phần nội dung */}
       <div className="flex-1 py-1 md:py-2 min-w-0">
-        {/* THAY ĐỔI: Bỏ class 'truncate', thêm 'whitespace-normal' để tự động xuống dòng khi tên quá dài */}
         <h3 className="font-black text-orange-500 text-xl md:text-3xl mb-1 uppercase italic tracking-tighter leading-tight whitespace-normal break-words">
           {data.title_vi}
         </h3>
         
         <p className="text-[9px] md:text-[10px] text-gray-500 mb-4 md:mb-6 font-bold tracking-[0.1em] md:tracking-[0.2em] uppercase">
-          Tác giả: <span className="text-gray-300">{data.author_vi}</span>
+          Tác giả: <span className="text-gray-300">{data.author_vi || "Đang cập nhật"}</span>
         </p>
 
-        {/* PHẦN GIỚI THIỆU CÓ THỂ MỞ RỘNG */}
+        {/* PHẦN GIỚI THIỆU */}
         <div className="space-y-1 mb-4 md:mb-8">
           <p className="text-[8px] md:text-[9px] text-gray-700 font-black uppercase tracking-widest">Giới thiệu:</p>
           <div className="relative">
             <p className={`text-[10px] md:text-xs text-gray-400 leading-5 md:leading-6 font-light italic transition-all duration-300 ${!isExpanded ? "line-clamp-2 md:line-clamp-4" : ""}`}>
-              {data.description_vi}
+              {data.description_vi || "Chưa có mô tả cho truyện này."}
             </p>
             
             {data.description_vi?.length > 100 && (
@@ -52,6 +62,7 @@ export const BookCard = ({ data, savedHistory,
           </div>
         </div>
 
+        {/* NÚT ĐIỀU KHIỂN */}
         <div className="flex flex-wrap gap-2 md:gap-3">
           <button
             onClick={onReadClick}
@@ -69,6 +80,7 @@ export const BookCard = ({ data, savedHistory,
               "Đọc ngay >"
             )}
           </button>
+          
           <button
             onClick={onSaveClick}
             className={`border text-[8px] md:text-[9px] px-3 md:px-6 py-2 md:py-3 rounded-full font-bold transition-all uppercase ${isSaved
