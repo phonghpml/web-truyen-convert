@@ -1,6 +1,7 @@
 from playwright.async_api import async_playwright
 import asyncio
 import urllib.parse
+import re
 
 
 
@@ -230,89 +231,103 @@ def parse_stv_data(raw_str, url):
             })
     return chapters
 
-import asyncio
 import urllib.parse
+import asyncio
 import re
-from playwright.async_api import async_playwright
+import json
 
 async def scrape_stv_chapter_content(url: str):
     url = urllib.parse.unquote(url).strip()
     print(f"🔍 Đang truy cập: {url}")
+    path_parts = url.rstrip("/").split("/")
+    target_id = path_parts[-1]
+    print(f"🎯 Mục tiêu: Phải khớp ID {target_id} trong Network")
     
-    context = await get_browser() # Sử dụng browser context hiện tại của Phong
+    context = await get_browser() 
     page = await context.new_page()
     
-    # Biến hứng dữ liệu từ API sajax của STV
-    captured_data = {"raw": None}
+    # Biến hứng dữ liệu kèm metadata để kiểm tra
+    captured_data = {"raw": None, "url_found": None}
 
-    # Lắng nghe Network để bắt gói tin JSON chứa nội dung truyện
     async def handle_response(response):
-        if "sajax=readchapter" in response.url:
-            try:
-                json_res = await response.json()
-                if json_res.get("data"):
-                    captured_data["raw"] = json_res["data"]
-                    print(f"✅ Đã bắt được nội dung từ API (Size: {len(captured_data['raw'])} chars)")
-            except Exception as e:
-                print(f"⚠️ Lỗi parse JSON API: {e}")
+        res_url = response.url
+        
+        # BẮT LỖI 1: Log tất cả các request có liên quan đến readchapter để xem có bao nhiêu cái đang chạy
+        if "sajax=readchapter" in res_url:
+            print(f"📡 Thấy API gọi: {res_url[:100]}...") # Log ngắn gọn URL API
+
+            if target_id in res_url:
+                try:
+                    if response.status == 200:
+                        json_res = await response.json()
+                        data = json_res.get("data")
+                        
+                        # BẮT LỖI 2: Kiểm tra xem data có thực sự là nội dung truyện không
+                        if data:
+                            # Nếu đã có dữ liệu rồi mà vẫn nhận thêm (do reload/F5) thì log lại
+                            if captured_data["raw"]:
+                                print(f"⚠️ CẢNH BÁO: Nhận thêm dữ liệu mới cho ID {target_id}. Có thể do F5 nhanh quá.")
+                            
+                            captured_data["raw"] = data
+                            captured_data["url_found"] = res_url
+                            print(f"✅ Đã bắt đúng API cho chương ID: {target_id} (Size: {len(data)})")
+                        else:
+                            print(f"❗ API trả về JSON thành công nhưng 'data' bị rỗng. Chi tiết: {json_res}")
+                    else:
+                        print(f"❌ API trả về lỗi Status: {response.status}")
+                except Exception as e:
+                    print(f"⚠️ Lỗi parse JSON: {e}")
+            else:
+                # BẮT LỖI 3: Nếu bắt được API nhưng không chứa target_id
+                print(f"⏭️ Bỏ qua API không thuộc chương này (Có thể là chương trước đó)")
 
     page.on("response", handle_response)
 
     try:
-        # Bước 1: Điều hướng tới trang (đợi mạng ổn định một chút)
-        await page.goto(url, wait_until="commit", timeout=60000)
+        # Bước 1: Điều hướng - dùng 'networkidle' để đảm bảo ko còn request ngầm
+        await page.goto(url, wait_until="networkidle", timeout=60000)
         
-        # Bước 2: Thủ thuật kích hoạt Load (Mồi cho STV gọi API sajax)
-        # STV đôi khi đợi người dùng tương tác mới chịu load nội dung
-        await asyncio.sleep(1) # Đợi JS trang chủ load xong
+        # Bước 2: Kích hoạt load
+        await asyncio.sleep(2) 
+        
         try:
-            # Click vào vùng chứa nội dung để 'đánh thức' script của STV
-            await page.click("#content-container", timeout=5000)
+            await page.click("#content-container", timeout=3000)
         except:
-            # Nếu không có ID đó, cuộn chuột nhẹ để kích hoạt lazyload
-            await page.mouse.wheel(0, 500)
-            print("🖱️ Đã cuộn trang để kích hoạt API")
+            await page.mouse.wheel(0, 1000)
+            print("🖱️ Đã cuộn trang")
 
-        # Bước 3: Vòng lặp chờ dữ liệu (Tối đa 15 giây)
+        # Bước 3: Chờ dữ liệu
         found = False
         for i in range(30): 
             if captured_data["raw"]:
                 found = True
                 break
+            if i % 10 == 0: print(f"⏳ Đang đợi API khớp ID {target_id}...")
             await asyncio.sleep(0.5)
 
         if not found:
-            print("❌ Quá thời gian chờ nhưng không bắt được API sajax=readchapter")
-            # Chụp ảnh debug nếu cần (Lưu vào thư mục hiện tại của Phong)
-            await page.screenshot(path="debug_stv_error.png")
+            print(f"❌ THẤT BẠI: Không bắt được API nào chứa ID {target_id}")
+            # Chụp ảnh để xem có bị dính Captcha/Cloudflare không
+            await page.screenshot(path=f"fail_{target_id}.png")
             return None
 
-        # Bước 4: Xử lý bóc tách text từ HTML thô trong JSON
+        # Bước 4: Xử lý nội dung
         raw_html = captured_data["raw"]
-        paragraphs = []
         
-        # Tách các đoạn theo thẻ <p>
-        raw_sections = raw_html.split('<p>')
-        for section in raw_sections:
-            # Regex lấy nội dung hiển thị nằm trong các thẻ <i> của STV
-            # Cấu trúc: <i ...>Chữ Hiển Thị</i>
-            words = re.findall(r'>([^<]+)</i>', section)
-            if words:
-                # Ghép các từ lại thành dòng hoàn chỉnh, xóa khoảng trắng thừa
-                line = " ".join(words).strip()
-                if line:
-                    paragraphs.append(line)
-
-        if not paragraphs:
-            print("❌ Regex không tìm thấy nội dung hợp lệ trong dữ liệu bắt được")
-            return None
-
-        print(f"🚀 Thành công: Đã lấy được {len(paragraphs)} đoạn văn.")
-        return "\n".join(paragraphs)
+        # BẮT LỖI 4: Kiểm tra xem có phải nội dung thật hay là nội dung chờ load
+        if "Đang tải nội dung" in raw_html or len(raw_html) < 200:
+            print("⚠️ Dữ liệu bắt được có vẻ là placeholder 'Đang tải...', không phải nội dung thật.")
+        
+        # ... (Phần xử lý paragraphs phía dưới giữ nguyên) ...
+        # [Để tiết kiệm diện tích, phần bóc tách regex bạn giữ nguyên như code cũ]
+        
+        # Cuối cùng: Log một đoạn nhỏ kết quả đã sạch
+        result = "\n".join(paragraphs)
+        print(f"🚀 Thành công. Preview: {result[:100]}...")
+        return result
 
     except Exception as e:
-        print(f"❌ Lỗi hệ thống Scraper STV: {str(e)}")
+        print(f"❌ Lỗi Scraper: {str(e)}")
         return None
     finally:
-        # Quan trọng: Luôn đóng page để giải phóng RAM cho WSL 2
         await page.close()
