@@ -232,16 +232,17 @@ def parse_stv_data(raw_str, url):
     return chapters
 
 
-import json
-
 async def scrape_stv_chapter_content(url: str):
     # 1. Trích xuất ID để đối chiếu (Chống lấy nhầm chương cũ)
+    print(f"🚀 [START] Đang xử lý chương: {url}")
     url = urllib.parse.unquote(url).strip()
     path_parts = [p for p in url.split("/") if p]
     try:
-        # Giả định URL: .../bookid/chapterid/
-        target_chap_id = path_parts[4]
+        # Giả định URL: https://sangtacviet.com/truyen/sangtac/1/47647/16/
+        target_chap_id = path_parts[-1]
+        source_type = path_parts[3]
     except:
+        print(f"❌ [ERROR] Không thể trích xuất Chapter ID từ URL: {url}")
         return None
 
     print(f"🚀 [START] Đang xử lý chương: {target_chap_id}")
@@ -259,77 +260,107 @@ async def scrape_stv_chapter_content(url: str):
     # 3. Lắng nghe API sajax - Có lọc ID chương
     async def handle_response(response):
         res_url = response.url
-        if "sajax=readchapter" in res_url and target_chap_id in res_url:
-            try:
-                # Đọc text và tìm JSON để tránh rác đầu chuỗi
-                text_res = await response.text()
-                start_idx = text_res.find('{"')
-                if start_idx != -1:
-                    data_json = json.loads(text_res[start_idx:])
-                    if data_json.get("code") == "0" and data_json.get("data"):
-                        captured_data["raw"] = data_json["data"]
-            except:
-                pass
+        if "sajax=readchapter" in res_url:
+            # Debug: Log ra các request API phát hiện được
+            if target_chap_id in res_url:
+                try:
+                    # Đọc text và tìm JSON để tránh rác đầu chuỗi
+                    text_res = await response.text()
+                    start_idx = text_res.find('{"')
+                    if start_idx != -1:
+                        data_json = json.loads(text_res[start_idx:])
+                        if data_json.get("code") == "0" and data_json.get("data"):
+                            captured_data["raw"] = data_json["data"]
+                            print(f"✅ [SUCCESS] Đã bắt đúng API chương {target_chap_id} ({len(data_json['data'])} ký tự)")
+                except Exception as e:
+                    print(f"⚠️ [API ERROR] Lỗi xử lý response: {e}")
+            else:
+                # Thông báo nếu bắt nhầm API của ID khác
+                print(f"⏭️ [SKIP] Bỏ qua API không khớp ID: {res_url[-30:]}")
 
     page.on("response", handle_response)
 
     try:
         # Bước 1: Điều hướng
+        print(f"Step 1: Điều hướng tới {url}")
         await page.goto(url, wait_until="commit", timeout=60000)
+        
+        # DEBUG: Chụp ảnh sau khi trang vừa load
+        await page.screenshot(path=f"debug_{target_chap_id}_1_goto.png")
         
         # Bước 2: Đợi nạp script và kích hoạt API
         await asyncio.sleep(1.5)
         
         # Thử kích hoạt nạp bằng cách click hoặc cuộn chuột
+        print("Step 2: Kích hoạt API bằng Click/Scroll...")
         try:
             await page.click("#content-container", timeout=2000)
         except:
             await page.mouse.wheel(0, 500)
 
         # Bước 3: Chờ dữ liệu đổ về (Tối đa 12 giây)
-        for _ in range(40):
+        found = False
+        for i in range(40):
             if captured_data["raw"]:
+                found = True
                 break
+            if i % 10 == 0:
+                print(f"⏳ [WAITING] Đang đợi dữ liệu... ({i*0.3}s)")
             await asyncio.sleep(0.3)
 
         # Dự phòng: Click nút nạp nếu vẫn chưa thấy
-        if not captured_data["raw"]:
+        if not found:
+            print("Step 3 (Dự phòng): Thử click nút nạp thủ công...")
             try:
                 btn = page.get_by_text("Nhấp vào để tải chương")
                 if await btn.is_visible(timeout=1000):
                     await btn.click()
                     for _ in range(20):
-                        if captured_data["raw"]: break
+                        if captured_data["raw"]: 
+                            found = True
+                            break
                         await asyncio.sleep(0.3)
             except:
                 pass
 
-        if not captured_data["raw"]:
+        if not found:
+            print(f"❌ [TIMEOUT] Không bắt được dữ liệu cho chương {target_chap_id}")
+            # DEBUG: Chụp ảnh lúc bị timeout
+            await page.screenshot(path=f"debug_{target_chap_id}_2_timeout.png")
             return None
 
-        # Bước 4: Bóc tách nội dung bằng Regex (Thẻ <i>)
-        raw_html = captured_data["raw"]
-        paragraphs = []
         
-        for section in raw_html.split('<p>'):
-            if "@Bạn đang đọc" in section:
-                continue
-                
-            # Lấy text hiển thị trong các thẻ <i>
-            words = re.findall(r'>([^<]+)</i>', section)
-            if words:
-                line = " ".join(words).strip()
-                if line:
-                    paragraphs.append(line)
+        # Bước 4: Bóc tách nội dung
+        print(f"Step 4: Đang trích xuất nội dung (Nguồn: {source_type})...")
+        raw_data = captured_data["raw"]
+        paragraphs = []
+
+        if source_type == "sangtac":
+            # Nguồn sangtac: Tách dòng theo \n, giữ nguyên mọi ký tự
+            paragraphs = [line.strip() for line in raw_data.split('\n') if line.strip()]
+        else:
+            # Các nguồn khác: Giữ nguyên logic bóc thẻ <i> như cũ
+            for section in raw_data.split('<p>'):
+                # Lấy text hiển thị trong các thẻ <i>
+                words = re.findall(r'>([^<]+)</i>', section)
+                if words:
+                    line = " ".join(words).strip()
+                    if line:
+                        paragraphs.append(line)
 
         return "\n\n".join(paragraphs)
 
+        print(f"🏁 [DONE] Hoàn tất: {len(paragraphs)} đoạn văn.")
+        return "\n\n".join(paragraphs)
+
     except Exception as e:
-        print(f"🔥 Lỗi Scraper: {str(e)}")
+        print(f"🔥 [CRASH] Lỗi Scraper: {str(e)}")
+        # DEBUG: Chụp ảnh khi gặp lỗi crash
+        await page.screenshot(path=f"debug_{target_chap_id}_crash.png")
         return None
     finally:
         # QUAN TRỌNG: Gỡ listener và đóng context để giải phóng RAM
         page.remove_listener("response", handle_response)
         await page.close()
         await context.close()
-        print(f"🏁 [FINISHED] Xong chương {target_chap_id}")
+        print(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
