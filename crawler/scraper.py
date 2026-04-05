@@ -3,7 +3,6 @@ import json
 import re
 import urllib.parse
 from playwright.async_api import async_playwright
-from playwright_stealth import Stealth
 
 # Biến toàn cục
 _browser = None
