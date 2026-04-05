@@ -1,9 +1,9 @@
-from playwright.async_api import async_playwright
 import asyncio
-import urllib.parse
+import json
 import re
-
-
+import urllib.parse
+from playwright.async_api import async_playwright
+from playwright_stealth import Stealth
 
 # Biến toàn cục
 _browser = None
@@ -231,103 +231,105 @@ def parse_stv_data(raw_str, url):
             })
     return chapters
 
-import urllib.parse
-import asyncio
-import re
+
 import json
 
 async def scrape_stv_chapter_content(url: str):
+    # 1. Trích xuất ID để đối chiếu (Chống lấy nhầm chương cũ)
     url = urllib.parse.unquote(url).strip()
-    print(f"🔍 Đang truy cập: {url}")
-    path_parts = url.rstrip("/").split("/")
-    target_id = path_parts[-1]
-    print(f"🎯 Mục tiêu: Phải khớp ID {target_id} trong Network")
-    
-    context = await get_browser() 
-    page = await context.new_page()
-    
-    # Biến hứng dữ liệu kèm metadata để kiểm tra
-    captured_data = {"raw": None, "url_found": None}
+    path_parts = [p for p in url.split("/") if p]
+    try:
+        # Giả định URL: .../bookid/chapterid/
+        target_chap_id = path_parts[4]
+    except:
+        return None
 
+    print(f"🚀 [START] Đang xử lý chương: {target_chap_id}")
+    
+    # Lấy browser instance
+    existing_context = await get_browser()
+    browser = existing_context.browser 
+    
+    # 2. Tạo một context mới hoàn toàn (Incognito) để tránh dính Cookie/Session
+    context = await browser.new_context()
+    page = await context.new_page()
+
+    captured_data = {"raw": None}
+
+    # 3. Lắng nghe API sajax - Có lọc ID chương
     async def handle_response(response):
         res_url = response.url
-        
-        # BẮT LỖI 1: Log tất cả các request có liên quan đến readchapter để xem có bao nhiêu cái đang chạy
-        if "sajax=readchapter" in res_url:
-            print(f"📡 Thấy API gọi: {res_url[:100]}...") # Log ngắn gọn URL API
-
-            if target_id in res_url:
-                try:
-                    if response.status == 200:
-                        json_res = await response.json()
-                        data = json_res.get("data")
-                        
-                        # BẮT LỖI 2: Kiểm tra xem data có thực sự là nội dung truyện không
-                        if data:
-                            # Nếu đã có dữ liệu rồi mà vẫn nhận thêm (do reload/F5) thì log lại
-                            if captured_data["raw"]:
-                                print(f"⚠️ CẢNH BÁO: Nhận thêm dữ liệu mới cho ID {target_id}. Có thể do F5 nhanh quá.")
-                            
-                            captured_data["raw"] = data
-                            captured_data["url_found"] = res_url
-                            print(f"✅ Đã bắt đúng API cho chương ID: {target_id} (Size: {len(data)})")
-                        else:
-                            print(f"❗ API trả về JSON thành công nhưng 'data' bị rỗng. Chi tiết: {json_res}")
-                    else:
-                        print(f"❌ API trả về lỗi Status: {response.status}")
-                except Exception as e:
-                    print(f"⚠️ Lỗi parse JSON: {e}")
-            else:
-                # BẮT LỖI 3: Nếu bắt được API nhưng không chứa target_id
-                print(f"⏭️ Bỏ qua API không thuộc chương này (Có thể là chương trước đó)")
+        if "sajax=readchapter" in res_url and target_chap_id in res_url:
+            try:
+                # Đọc text và tìm JSON để tránh rác đầu chuỗi
+                text_res = await response.text()
+                start_idx = text_res.find('{"')
+                if start_idx != -1:
+                    data_json = json.loads(text_res[start_idx:])
+                    if data_json.get("code") == "0" and data_json.get("data"):
+                        captured_data["raw"] = data_json["data"]
+            except:
+                pass
 
     page.on("response", handle_response)
 
     try:
-        # Bước 1: Điều hướng - dùng 'networkidle' để đảm bảo ko còn request ngầm
-        await page.goto(url, wait_until="networkidle", timeout=60000)
+        # Bước 1: Điều hướng
+        await page.goto(url, wait_until="commit", timeout=60000)
         
-        # Bước 2: Kích hoạt load
-        await asyncio.sleep(2) 
+        # Bước 2: Đợi nạp script và kích hoạt API
+        await asyncio.sleep(1.5)
         
+        # Thử kích hoạt nạp bằng cách click hoặc cuộn chuột
         try:
-            await page.click("#content-container", timeout=3000)
+            await page.click("#content-container", timeout=2000)
         except:
-            await page.mouse.wheel(0, 1000)
-            print("🖱️ Đã cuộn trang")
+            await page.mouse.wheel(0, 500)
 
-        # Bước 3: Chờ dữ liệu
-        found = False
-        for i in range(30): 
+        # Bước 3: Chờ dữ liệu đổ về (Tối đa 12 giây)
+        for _ in range(40):
             if captured_data["raw"]:
-                found = True
                 break
-            if i % 10 == 0: print(f"⏳ Đang đợi API khớp ID {target_id}...")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
 
-        if not found:
-            print(f"❌ THẤT BẠI: Không bắt được API nào chứa ID {target_id}")
-            # Chụp ảnh để xem có bị dính Captcha/Cloudflare không
-            await page.screenshot(path=f"fail_{target_id}.png")
+        # Dự phòng: Click nút nạp nếu vẫn chưa thấy
+        if not captured_data["raw"]:
+            try:
+                btn = page.get_by_text("Nhấp vào để tải chương")
+                if await btn.is_visible(timeout=1000):
+                    await btn.click()
+                    for _ in range(20):
+                        if captured_data["raw"]: break
+                        await asyncio.sleep(0.3)
+            except:
+                pass
+
+        if not captured_data["raw"]:
             return None
 
-        # Bước 4: Xử lý nội dung
+        # Bước 4: Bóc tách nội dung bằng Regex (Thẻ <i>)
         raw_html = captured_data["raw"]
+        paragraphs = []
         
-        # BẮT LỖI 4: Kiểm tra xem có phải nội dung thật hay là nội dung chờ load
-        if "Đang tải nội dung" in raw_html or len(raw_html) < 200:
-            print("⚠️ Dữ liệu bắt được có vẻ là placeholder 'Đang tải...', không phải nội dung thật.")
-        
-        # ... (Phần xử lý paragraphs phía dưới giữ nguyên) ...
-        # [Để tiết kiệm diện tích, phần bóc tách regex bạn giữ nguyên như code cũ]
-        
-        # Cuối cùng: Log một đoạn nhỏ kết quả đã sạch
-        result = "\n".join(paragraphs)
-        print(f"🚀 Thành công. Preview: {result[:100]}...")
-        return result
+        for section in raw_html.split('<p>'):
+            if "@Bạn đang đọc" in section:
+                continue
+                
+            # Lấy text hiển thị trong các thẻ <i>
+            words = re.findall(r'>([^<]+)</i>', section)
+            if words:
+                line = " ".join(words).strip()
+                if line:
+                    paragraphs.append(line)
+
+        return "\n\n".join(paragraphs)
 
     except Exception as e:
-        print(f"❌ Lỗi Scraper: {str(e)}")
+        print(f"🔥 Lỗi Scraper: {str(e)}")
         return None
     finally:
+        # QUAN TRỌNG: Gỡ listener và đóng context để giải phóng RAM
+        page.remove_listener("response", handle_response)
         await page.close()
+        await context.close()
+        print(f"🏁 [FINISHED] Xong chương {target_chap_id}")
