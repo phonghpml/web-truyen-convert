@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { 
-  ArrowLeft, ArrowRight, Settings, Loader2, Headphones, 
+import {
+  ArrowLeft, ArrowRight, Settings, Loader2, Headphones,
   Square, SkipForward, SkipBack, Gauge, User
 } from "lucide-react";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
-import { Navbar } from "@/components/layout/Navbar"; 
+import { Navbar } from "@/components/layout/Navbar";
 
 let contentAbortController: AbortController | null = null;
 
@@ -15,7 +15,7 @@ export default function ChapterPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const slug = params.slug as string;
   const chapterSlug = params.chapter_slug as string;
   const chapterUrl = searchParams.get("url");
@@ -25,8 +25,8 @@ export default function ChapterPage() {
   const [fontSize, setFontSize] = useState(18);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [speed, setSpeed] = useState("+0%"); 
-  const [voice, setVoice] = useState("vi-VN-NamMinhNeural"); 
+  const [speed, setSpeed] = useState("+0%");
+  const [voice, setVoice] = useState("vi-VN-NamMinhNeural");
   const [activeMenu, setActiveMenu] = useState<"none" | "audio" | "style">("none");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -36,9 +36,9 @@ export default function ChapterPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") audioRef.current = new Audio();
-    return () => { 
-      stopAudio(); 
-      clearBlobCache(); 
+    return () => {
+      stopAudio();
+      clearBlobCache();
       if (contentAbortController) contentAbortController.abort();
     };
   }, []);
@@ -62,11 +62,15 @@ export default function ChapterPage() {
         signal: contentAbortController.signal
       });
       const data = await res.json();
-      if (data.success) setParagraphs(data.paragraphs);
+      if (data.success) {
+        setParagraphs(data.paragraphs);
+        setLoading(false);
+      }
     } catch (err: any) {
-      if (err.name !== 'AbortError') console.error(err);
-    } finally {
-      if (!contentAbortController.signal.aborted) setLoading(false);
+      if (err.name !== 'AbortError') {
+        console.error(err);
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -82,7 +86,7 @@ export default function ChapterPage() {
       const response = await fetch(`${CRAWLER_BASE_URL}/stream-chapter-audio?text=${text}&rate=${encodeURIComponent(speed)}&voice=${voice}`);
       const blob = await response.blob();
       blobCache.current[index] = URL.createObjectURL(blob);
-    } catch (e) { console.error(e); } 
+    } catch (e) { console.error(e); }
     finally { loadingTasks.current.delete(index); }
   };
 
@@ -114,6 +118,8 @@ export default function ChapterPage() {
     const targetIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
     if (targetIndex >= 0 && targetIndex < savedChapters.length) {
       stopAudio();
+      setLoading(true);
+      setParagraphs([]);
       const targetChapter = savedChapters[targetIndex];
       router.push(`/book/${slug}/${targetChapter.slug}?url=${encodeURIComponent(targetChapter.url)}`);
     }
@@ -128,8 +134,8 @@ export default function ChapterPage() {
       <div className="sticky top-0 z-40 bg-black/90 backdrop-blur-md border-b border-zinc-900 px-4 py-3 md:py-5">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <button 
-              onClick={() => router.push(`/book/${slug}`)} 
+            <button
+              onClick={() => router.push(`/book/${slug}`)}
               className="text-zinc-600 hover:text-orange-500 transition-colors flex-shrink-0"
             >
               <ArrowLeft size={18} className="md:w-5 md:h-5" />
@@ -145,13 +151,13 @@ export default function ChapterPage() {
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-            <button 
+            <button
               onClick={() => setActiveMenu(activeMenu === "audio" ? "none" : "audio")}
               className={`p-2 md:p-2.5 rounded-lg transition-all ${activeMenu === "audio" ? "bg-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)]" : "bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800"}`}
             >
               <Headphones size={16} className="md:w-[18px] md:h-[18px]" />
             </button>
-            <button 
+            <button
               onClick={() => setActiveMenu(activeMenu === "style" ? "none" : "style")}
               className={`p-2 md:p-2.5 rounded-lg transition-all ${activeMenu === "style" ? "bg-zinc-700 text-white" : "bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800"}`}
             >
@@ -165,8 +171,8 @@ export default function ChapterPage() {
             <div className="mt-3 p-3 md:p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-6">
                 <button onClick={() => playParagraph(activeIndex - 1)} className="text-zinc-500 hover:text-white"><SkipBack size={20} /></button>
-                <button 
-                  onClick={() => isPlaying ? stopAudio() : playParagraph(activeIndex === -1 ? 0 : activeIndex)} 
+                <button
+                  onClick={() => isPlaying ? stopAudio() : playParagraph(activeIndex === -1 ? 0 : activeIndex)}
                   className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-orange-600 text-black hover:scale-105 transition-all shadow-[0_0_15px_rgba(234,88,12,0.3)]"
                 >
                   {isPlaying ? <Square size={14} fill="currentColor" /> : <Headphones size={16} />}
@@ -215,12 +221,12 @@ export default function ChapterPage() {
         ) : (
           <article className="space-y-8 md:space-y-12 pb-32 md:pb-40">
             {paragraphs.map((para, idx) => (
-              <p 
+              <p
                 key={idx} id={`para-${idx}`} onClick={() => playParagraph(idx)}
-                style={{ fontSize: `${fontSize}px` }} 
+                style={{ fontSize: `${fontSize}px` }}
                 className={`leading-[1.8] md:leading-[2.0] font-serif text-justify transition-all duration-300 cursor-pointer p-2 rounded-lg border border-transparent 
-                  ${idx === activeIndex 
-                    ? "text-orange-400 font-medium bg-orange-500/5 border-orange-500/10 shadow-[0_0_30px_rgba(249,115,22,0.08)]" 
+                  ${idx === activeIndex
+                    ? "text-orange-400 font-medium bg-orange-500/5 border-orange-500/10 shadow-[0_0_30px_rgba(249,115,22,0.08)]"
                     : isPlaying ? "text-zinc-700 opacity-30" : "text-zinc-300 hover:text-white"
                   }`}
               >
@@ -236,16 +242,16 @@ export default function ChapterPage() {
         <footer className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-xl border-t border-zinc-900 p-2 md:p-4 z-50">
           <div className="max-w-7xl mx-auto flex items-center justify-between px-2 md:px-10">
             {/* Nút "Trước" - Gọn gàng và cách đều */}
-            <button 
+            <button
               onClick={() => handleNavigate("prev")}
               className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-[11px] font-black text-zinc-500 hover:text-orange-500 transition-all uppercase italic tracking-tighter font-mono py-2 px-1 md:px-3 rounded-lg hover:bg-zinc-900/50"
             >
               <ArrowLeft size={14} className="md:w-4 md:h-4 flex-shrink-0" />
               <span>Chương trước</span>
             </button>
-            
+
             {/* Nút "Sau" - Đồng bộ màu, gọn gàng và cách đều */}
-            <button 
+            <button
               onClick={() => handleNavigate("next")}
               className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-[11px] font-black text-zinc-500 hover:text-orange-500 transition-all uppercase italic tracking-tighter font-mono py-2 px-2 md:px-3 rounded-lg hover:bg-zinc-900/50"
             >
