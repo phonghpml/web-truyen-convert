@@ -177,3 +177,71 @@ async def api_get_chapters(request: TranslationRequest):
         return {"success": True, "total": len(translated_chapters), "chapters": translated_chapters}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+from fastapi import HTTPException
+
+@app.get("/get-qidian-rank")
+async def api_get_qidian_rank(
+    type: str = "yuepiao", 
+    chn: int = -1,          # Đổi mặc định thành -1 để khớp với mục "Tất Cả" mới cập nhật
+    page: int = 1,          # Bổ sung tham số phân trang page
+    year: str = None,       # Bổ sung bộ lọc năm động
+    month: str = None       # Bổ sung bộ lọc tháng động
+):
+    """
+    Endpoint xử lý dữ liệu In-Memory (RAM):
+    - Nhận tham số loại BXH (type), ID Thể loại (chn), phân trang (page) và thời gian (year, month).
+    - Gọi hàm cào đa năng từ scraper.py để lấy mảng chữ Hán thô theo thời gian chỉ định.
+    - Chạy qua bộ dịch thuật Aho-Corasick có sẵn trong RAM để Việt hóa.
+    - Định dạng lại tên trường (camelCase) và bọc dữ liệu chuẩn theo thiết kế Frontend.
+    """
+    try:
+        # 1. Gọi hàm cào từ scraper.py, chuyển tiếp toàn bộ tham số bộ lọc thời gian và phân trang
+        raw_data = await scr.scrape_qidian_ranking(
+            category_id=type, 
+            chn_id=chn, 
+            page=page, 
+            year=year, 
+            month=month
+        )
+        
+        if not raw_data:
+            return {
+                "success": False, 
+                "data": {"data": []}, 
+                "message": "Không tìm thấy hoặc lỗi cào dữ liệu từ nguồn gốc."
+            }
+
+        translated_results = []
+        
+        for book in raw_data:
+            # 2. Đưa qua bộ dịch thuật Aho-Corasick đã được map sẵn trong RAM từ lúc khởi động hệ thống
+            title_vi = tr.translate_text(book['title_cn'])
+            author_vi = tr.translate_text(book['author_cn'])
+            category_vi = tr.translate_text(book['category_cn'])
+            desc_vi = tr.translate_text(book['desc_cn'], limit=500)  # Giới hạn độ dài mô tả cho gọn UI
+            
+            # 3. Tạo cấu trúc key phẳng, chuẩn camelCase khớp 100% với file page.tsx của Next.js
+            translated_results.append({
+                "rank": book['rank'],
+                "title": title_vi if title_vi else book['title_cn'],  # Ưu tiên hiển thị tên Việt
+                "title_cn": book['title_cn'],                         # Giữ lại tên gốc để làm tính năng khác (như tìm nguồn shuba)
+                "author": author_vi if author_vi else "Ẩn danh",
+                "category": category_vi if category_vi else "Chưa phân loại",
+                "intro": desc_vi if desc_vi else "Chưa có tóm tắt cốt truyện...",
+                "coverUrl": book['cover_url'],                        # Map từ cover_url sang coverUrl
+                "sourceUrl": book['source_url'],                      # Map từ source_url sang sourceUrl
+                "slug": generate_unique_slug(title_vi if title_vi else book['title_cn'])  # Tạo slug định danh
+            })
+
+        # 4. Bọc đúng 2 lớp .data.data để tương thích hoàn toàn với logic check bên Next.js
+        return {
+            "success": True,
+            "data": {
+                "data": translated_results
+            }
+        }
+
+    except Exception as e:
+        print(f"🔥 Lỗi nghiêm trọng tại API BXH Qidian: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

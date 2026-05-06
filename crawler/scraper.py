@@ -363,3 +363,117 @@ async def scrape_stv_chapter_content(url: str):
         await page.close()
         await context.close()
         print(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
+    
+import datetime
+
+async def scrape_qidian_ranking(
+    category_id: str = "yuepiao", 
+    chn_id: int = -1, 
+    page: int = 1,
+    year: str = None,
+    month: str = None
+):
+    """
+    Hàm cào dữ liệu xếp hạng Qidian đa năng hoàn chỉnh:
+    - Đồng nhất 100% cấu trúc URL theo định dạng dòng thời gian (kể cả page 1).
+    - Hỗ trợ bộ lọc Năm (year) và Tháng (month) động truyền từ Frontend xuống.
+    """
+    # 1. KIỂM TRA THỜI GIAN: Nếu không truyền, tự động lấy năm/tháng hiện tại làm mặc định
+    now = datetime.datetime.now()
+    final_year = year if year else now.strftime("%Y")
+    final_month = month if month else now.strftime("%m")
+    
+    # Đảm bảo tháng luôn có 2 chữ số (Ví dụ: khách truyền "5" -> chuyển thành "05")
+    if len(final_month) == 1:
+        final_month = f"0{final_month}"
+
+    # Định dạng chuỗi phân trang theo đúng yêu cầu: year2026-month05-page3
+    page_str = f"year{final_year}-month{final_month}-page{page}"
+
+    # 2. ĐỒNG NHẤT ĐƯỜNG DẪN URL THEO ĐỊNH DẠNG DÒNG THỜI GIAN:
+    if chn_id == -1:
+        # Nếu là -1 (Mục "Tất Cả")
+        if category_id in ["signnewbook", "pubnewbook", "newauthor"]:
+            url = f"https://www.qidian.com/rank/{category_id}/page/{page}/"
+        else:
+            url = f"https://www.qidian.com/rank/{category_id}/{page_str}/"
+    else:
+        # Nếu là các thể loại cụ thể bao gồm cả VIP 新作 (chn_id >= 0)
+        if category_id in ["signnewbook", "pubnewbook", "newauthor"]:
+            url = f"https://www.qidian.com/rank/{category_id}/page/{page}/chn{chn_id}/"
+        else:
+            url = f"https://www.qidian.com/rank/{category_id}/{page_str}/chn{chn_id}/"
+
+    print(f"\n[DEBUG] 1. Khởi tạo tài nguyên an toàn cho URL mục tiêu: {url}")
+    
+    # Sử dụng đúng logic bóc tách thực thể Browser gốc giống hàm cào chương của bạn
+    existing_context = await get_browser()
+    browser = existing_context.browser 
+    
+    # Khởi tạo một context ẩn danh mới tinh để cô lập session
+    context = await browser.new_context()
+    page_ctx = await context.new_page()
+    
+    # Chặn tải ảnh (png, jpg...) để tiết kiệm băng thông mạng và tăng tốc độ cào tối đa
+    await page_ctx.route("**/*.{png,jpg,jpeg,gif,svg}", lambda route: route.abort())
+
+    try:
+        print("[DEBUG] 2. Đang tải trang (Đợi hệ thống script chạy ngầm ổn định - networkidle)...")
+        await page_ctx.goto(url, wait_until="networkidle", timeout=30000)
+        
+        print("[DEBUG] 3. Trang đã tải xong. Kiểm tra vùng hiển thị danh sách truyện...")
+        
+        target_selector = ""
+        for selector in ['#book-img-text ul', '.rank-view-list', '.rank-body']:
+            try:
+                await page_ctx.wait_for_selector(selector, timeout=5000)
+                target_selector = selector
+                print(f" -> [OK] Đã phát hiện thấy vùng dữ liệu thông qua Selector: '{selector}'")
+                break
+            except Exception:
+                continue
+
+        if not target_selector:
+            print(" -> [FAIL] Không tìm thấy vùng hiển thị. Qidian có thể đã chặn IP hoặc không có dữ liệu lịch sử cho tháng này.")
+            return []
+
+        print("[DEBUG] 4. Bắt đầu chạy JavaScript thực thi bóc tách dữ liệu...")
+        ranking_data = await page_ctx.evaluate('''() => {
+            const listContainer = document.querySelector('#book-img-text ul') || document.querySelector('.rank-view-list ul');
+            if (!listContainer) return [];
+
+            const items = Array.from(listContainer.querySelectorAll('li'));
+            
+            return items.map((item, index) => {
+                const info = item.querySelector('.book-mid-info');
+                if (!info) return null;
+
+                const titleAnchor = info.querySelector('h2 a');
+                const authorLinks = Array.from(info.querySelectorAll('.author a'));
+                
+                const rawCoverUrl = item.querySelector('.book-img-box img')?.getAttribute('src') || "";
+                const cover_url = rawCoverUrl.startsWith('//') ? `https:${rawCoverUrl}` : rawCoverUrl;
+
+                return {
+                    rank: index + 1,
+                    title_cn: titleAnchor?.innerText?.trim() || "",
+                    author_cn: info.querySelector('.author a.name')?.innerText?.trim() || "",
+                    category_cn: authorLinks.length > 1 ? authorLinks[1]?.innerText?.trim() : "",
+                    desc_cn: info.querySelector('.intro')?.innerText?.trim() || "",
+                    source_url: titleAnchor?.href || "",
+                    cover_url: cover_url
+                };
+            }).filter(book => book !== null && book.title_cn !== "");
+        }''')
+        
+        print(f"[DEBUG] 5. Kết thúc xử lý. Trích xuất thành công {len(ranking_data)} truyện thô từ Qidian.")
+        return ranking_data
+        
+    except Exception as e:
+        print(f"❌ [CRITICAL] Lỗi phát sinh trong quá trình cào: {e}")
+        return []
+        
+    finally:
+        print("[DEBUG] 6. Đóng tab và giải phóng context cô lập.")
+        await page_ctx.close()
+        await context.close()
