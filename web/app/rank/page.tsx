@@ -17,7 +17,9 @@ import {
   TrendingUp,
   User,
   Layers,
-  ChevronRight
+  ChevronRight,
+  ChevronLeft,
+  Loader2
 } from 'lucide-react';
 
 // CẤU TRÚC PHÂN NHÓM BXH CHUẨN QUY MÔ QIDIAN
@@ -91,12 +93,19 @@ function RankContent() {
 
   const currentType = searchParams.get('type') || 'yuepiao';
   const currentChn = parseInt(searchParams.get('chn') || '-1', 10);
-  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+  
+  // Xử lý cẩn thận: Đảm bảo số trang luôn lớn hơn hoặc bằng 1
+  const rawPage = parseInt(searchParams.get('page') || '1', 10);
+  const currentPage = rawPage < 1 ? 1 : rawPage;
+
   const currentYear = searchParams.get('year') || currentYearStr;
   const currentMonth = searchParams.get('month') || currentMonthStr;
   
   const [books, setBooks] = useState<BookItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  
+  // Logic kiểm tra trang cuối (Qidian tối đa 5 trang, hoặc nếu số truyện trả về ít hơn 20 tức là đã hết)
+  const [isLastPage, setIsLastPage] = useState<boolean>(false);
 
   const yearsList = Array.from({ length: new Date().getFullYear() - 2020 + 1 }, (_, i) => (2020 + i).toString()).reverse();
   const monthsList = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
@@ -116,7 +125,9 @@ function RankContent() {
   }, [searchParams, router, currentYearStr, currentMonthStr]);
 
   const handleFilterChange = (type: string, chnId: number, page: number = 1, year: string = currentYear, month: string = currentMonth) => {
-    router.push(`/rank?type=${type}&chn=${chnId}&page=${page}&year=${year}&month=${month}`);
+    // Đảm bảo không bao giờ chuyển hướng đến số trang nhỏ hơn 1
+    const targetPage = page < 1 ? 1 : page;
+    router.push(`/rank?type=${type}&chn=${chnId}&page=${targetPage}&year=${year}&month=${month}`);
   };
 
   useEffect(() => {
@@ -131,12 +142,16 @@ function RankContent() {
         
         if (Array.isArray(rawList)) {
           setBooks(rawList);
+          // Cẩn thận: Nếu danh sách trả về < 20 item hoặc trang hiện tại đạt ngưỡng tối đa của Qidian (thường là trang 5)
+          setIsLastPage(rawList.length < 20 || currentPage >= 5);
         } else {
           setBooks([]);
+          setIsLastPage(true);
         }
       } catch (error) {
         console.error("Lỗi khi kết nối gọi API BXH:", error);
         setBooks([]); 
+        setIsLastPage(true);
       } finally {
         setIsLoading(false);
       }
@@ -181,11 +196,12 @@ function RankContent() {
                     return (
                       <button
                         key={item.id}
+                        disabled={isLoading} // Chặn chuyển đổi danh mục khi đang tải dữ liệu
                         onClick={() => handleFilterChange(item.id, -1, 1)}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-all text-left group ${
                           isActive 
                             ? 'bg-zinc-900 text-orange-500 font-bold border border-zinc-800' 
-                            : 'hover:bg-zinc-900/40 text-zinc-400 hover:text-zinc-200'
+                            : 'hover:bg-zinc-900/40 text-zinc-400 hover:text-zinc-200 disabled:opacity-50'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -208,23 +224,25 @@ function RankContent() {
           {/* CỘT PHẢI: CHI TIẾT DANH SÁCH BẢNG XẾP HẠNG TRUYỆN */}
           <main className="flex-1 w-full flex flex-col gap-4 md:gap-5">
             
-            {/* THANH CHỌN NHANH BỘ LỌC (THỜI GIAN & THỂ LOẠI TRUYỆN) */}
+            {/* THANH CHỌN NHANH BỘ LỌC */}
             <div className="bg-[#111111] border border-zinc-900 rounded-lg p-2 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
               
               {/* DROPDOWN CHỌN LỌC THỜI GIAN LỊCH SỬ */}
               <div className="flex items-center gap-1.5 border-b sm:border-b-0 sm:border-r border-zinc-900 pb-2 sm:pb-0 sm:pr-3 shrink-0">
                 <select
+                  disabled={isLoading}
                   value={currentYear}
                   onChange={(e) => handleFilterChange(currentType, currentChn, 1, e.target.value, currentMonth)}
-                  className="bg-zinc-950 border border-zinc-800/80 text-zinc-400 text-[11px] rounded px-2 py-1.5 font-mono focus:outline-none focus:border-orange-500 flex-1 sm:flex-initial"
+                  className="bg-zinc-950 border border-zinc-800/80 text-zinc-400 text-[11px] rounded px-2 py-1.5 font-mono focus:outline-none focus:border-orange-500 flex-1 sm:flex-initial disabled:opacity-50"
                 >
                   {yearsList.map(y => <option key={y} value={y}>Năm {y}</option>)}
                 </select>
 
                 <select
+                  disabled={isLoading}
                   value={currentMonth}
                   onChange={(e) => handleFilterChange(currentType, currentChn, 1, currentYear, e.target.value)}
-                  className="bg-zinc-950 border border-zinc-800/80 text-zinc-400 text-[11px] rounded px-2 py-1.5 font-mono focus:outline-none focus:border-orange-500 flex-1 sm:flex-initial"
+                  className="bg-zinc-950 border border-zinc-800/80 text-zinc-400 text-[11px] rounded px-2 py-1.5 font-mono focus:outline-none focus:border-orange-500 flex-1 sm:flex-initial disabled:opacity-50"
                 >
                   {monthsList.map(m => <option key={m} value={m}>Tháng {m}</option>)}
                 </select>
@@ -240,11 +258,12 @@ function RankContent() {
                   return (
                     <button
                       key={`${cat.id}-${cat.name}`}
+                      disabled={isLoading}
                       onClick={() => handleFilterChange(currentType, cat.id, 1)}
                       className={`px-3 py-1 rounded-md text-xs transition-all border shrink-0 snap-start ${
                         isCatActive 
                           ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 font-medium' 
-                          : 'bg-transparent border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
+                          : 'bg-transparent border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 disabled:opacity-50'
                       }`}
                     >
                       {cat.name}
@@ -257,7 +276,8 @@ function RankContent() {
             {/* BLOCK HIỂN THỊ DANH SÁCH TRUYỆN */}
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-32 bg-[#111111] rounded-xl border border-zinc-900">
-                <span className="text-xs font-mono uppercase tracking-widest text-zinc-600 animate-pulse text-center px-4">
+                <Loader2 className="w-5 h-5 text-orange-500 animate-spin mb-3" />
+                <span className="text-xs font-mono uppercase tracking-widest text-zinc-500 text-center px-4">
                   Đang đồng bộ hóa kho dữ liệu Qidian...
                 </span>
               </div>
@@ -345,23 +365,29 @@ function RankContent() {
                   );
                 })}
 
-                {/* THANH ĐIỀU HƯỚNG PHÂN TRANG */}
-                <div className="flex items-center justify-center gap-4 mt-3 pt-4 border-t border-zinc-900/60">
+                {/* HỆ THỐNG ĐIỀU HƯỚNG PHÂN TRANG HOÀN CHỈNH */}
+                <div className="flex items-center justify-center gap-5 mt-4 pt-4 border-t border-zinc-900/60 select-none">
                   <button 
-                    disabled={currentPage === 1}
-                    onClick={() => handleFilterChange(currentType, currentChn, Math.max(currentPage - 1, 1))}
-                    className="px-3 py-1.5 rounded bg-zinc-950 border border-zinc-900 text-xs text-zinc-400 disabled:opacity-30 disabled:cursor-not-allowed hover:border-zinc-700 transition-colors font-medium"
+                    disabled={currentPage === 1 || isLoading}
+                    onClick={() => handleFilterChange(currentType, currentChn, currentPage - 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-zinc-950 border border-zinc-900 text-xs text-zinc-400 disabled:opacity-20 disabled:hover:border-zinc-900 disabled:cursor-not-allowed hover:border-zinc-700 hover:text-zinc-200 transition-all font-medium"
                   >
-                    Trước
+                    <ChevronLeft size={14} /> Trước
                   </button>
-                  <span className="text-xs font-mono text-zinc-500">
-                    Trang <span className="text-zinc-200 font-bold">{currentPage}</span>
-                  </span>
+                  
+                  <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-500 bg-[#0a0a0a] border border-zinc-900 px-3 py-1.5 rounded-md">
+                    <span>Trang</span>
+                    <span className="text-orange-500 font-bold px-1 bg-zinc-900 rounded border border-zinc-800 min-w-[20px] text-center">
+                      {currentPage}
+                    </span>
+                  </div>
+
                   <button 
+                    disabled={isLastPage || isLoading}
                     onClick={() => handleFilterChange(currentType, currentChn, currentPage + 1)}
-                    className="px-3 py-1.5 rounded bg-zinc-950 border border-zinc-900 text-xs text-zinc-400 hover:border-zinc-700 transition-colors font-medium"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-zinc-950 border border-zinc-900 text-xs text-zinc-400 disabled:opacity-20 disabled:hover:border-zinc-900 disabled:cursor-not-allowed hover:border-zinc-700 hover:text-zinc-200 transition-all font-medium"
                   >
-                    Sau
+                    Sau <ChevronRight size={14} />
                   </button>
                 </div>
 
@@ -375,7 +401,6 @@ function RankContent() {
   );
 }
 
-// EXPORT ĐƯỢC CHỈNH SỬA CHÍNH: Bọc component bằng Suspense để Next.js Prerender khi build
 export default function QidianRankPage() {
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">

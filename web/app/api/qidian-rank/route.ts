@@ -5,17 +5,31 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  
+  // 1. Trích xuất đầy đủ các tham số từ Frontend URL gửi lên
   const type = searchParams.get('type') || 'yuepiao';
-  const chn = searchParams.get('chn') || '0'; // Lấy thêm mã thể loại chn từ Frontend gửi lên
+  const chn = searchParams.get('chn') || '-1'; // Mặc định là -1 (Tất cả) nếu không truyền
+  const page = searchParams.get('page') || '1';
+  const year = searchParams.get('year') || '';
+  const month = searchParams.get('month') || '';
 
   const MAX_RETRIES = 2; // Thử lại tối đa 2 lần nếu Crawler gặp sự cố đột ngột
   let lastError = 'Không thể lấy dữ liệu từ dịch vụ crawler.';
 
+  // 2. Xây dựng URL động để gọi sang Backend FastAPI kèm toàn bộ tham số
+  const crawlerUrl = new URL(`${process.env.NEXT_PUBLIC_CRAWLER_URL}/get-qidian-rank`);
+  crawlerUrl.searchParams.set('type', type);
+  crawlerUrl.searchParams.set('chn', chn);
+  crawlerUrl.searchParams.set('page', page);
+  if (year) crawlerUrl.searchParams.set('year', year);
+  if (month) crawlerUrl.searchParams.set('month', month);
+  crawlerUrl.searchParams.set('_t', Date.now().toString()); // Chống cache ở tầng mạng hỏa tốc
+
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // Ép tham số type và chn trực tiếp vào URL gọi sang Backend FastAPI
+      // Gọi sang Backend FastAPI với URL đã tích hợp đầy đủ searchParams
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_CRAWLER_URL}/get-qidian-rank?type=${type}&chn=${chn}&_t=${Date.now()}`, 
+        crawlerUrl.toString(), 
         {
           method: 'GET',
           // Sử dụng no-store khi đang thử lại để lấy dữ liệu mới nhất, tránh lấy lại cục lỗi cũ
@@ -35,7 +49,7 @@ export async function GET(request: Request) {
         throw new Error(data.error || data.detail || 'Tiến trình của Crawler bị gián đoạn giữa chừng.');
       }
       
-      // Trả thẳng cục data từ FastAPI về (Vì bên FastAPI đã đóng gói chuẩn dạng { success: true, data: { data: [...] } })
+      // Trả thẳng cục data từ FastAPI về
       return NextResponse.json(data);
 
     } catch (error: any) {

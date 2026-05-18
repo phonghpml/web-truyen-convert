@@ -3,40 +3,31 @@ import json
 import re
 import urllib.parse
 from playwright.async_api import async_playwright
+# IMPORT THEO ĐÚNG TÀI LIỆU CHÍNH THỨC CỦA CLOAKBROWSER
+import cloakbrowser
 
-# Biến toàn cục
-_browser = None
+# Biến toàn cục để tái sử dụng tài nguyên
 _context = None
 
 
+# SỬA ĐỔI HÀM KHỞI TẠO THEO CHUẨN ASYNC CỦA CLOAKBROWSER
 async def get_browser():
-    global _browser, _context
-    if _browser is None:
-        pw = await async_playwright().start()
-        _browser = await pw.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                # GIẤU DẤU VẾT BOT (QUAN TRỌNG NHẤT)
-                "--disable-blink-features=AutomationControlled", 
-                "--disable-infobars",
-                "--window-position=0,0",
-                "--ignore-certificate-errors",
-            ]
-        )
-        _context = await _browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={'width': 1280, 'height': 720},
-            locale="vi-VN",
-            timezone_id="Asia/Ho_Chi_Minh"
-        )
-        
-        # XOÁ DẤU VẾT WEBDRIVER TRÊN TOÀN BỘ TRANG
-        await _context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            window.chrome = { runtime: {} };
-        """)
+    global _context
+    if _context is None:
+        print("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
+        try:
+            # Sử dụng hàm bất đồng bộ gốc của CloakBrowser để tạo thẳng context ẩn danh
+            # Mọi cấu hình chống chặn bot (Blink, Webdriver, Fingerprint C++) đã được xử lý ở tầng C++ của binary
+            _context = await cloakbrowser.launch_context_async(
+                headless=True,
+                viewport={'width': 1280, 'height': 720},
+                locale="vi-VN",
+                timezone_id="Asia/Ho_Chi_Minh"
+            )
+            print("✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công!")
+        except Exception as e:
+            print(f"❌ Lỗi cấu hình cloakbrowser: {e}")
+            raise e
     return _context
 
 
@@ -101,12 +92,6 @@ async def scrape_chapter_content(url: str):
     url = urllib.parse.unquote(url).strip()
     context = await get_browser()
     page = await context.new_page()
-    
-    # CÁCH GỠ LỖI: Dùng script tự thân để giấu webdriver thay cho thư viện lỗi
-    await page.add_init_script("""
-        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-        window.chrome = { runtime: {} };
-    """)
 
     try:
         # Giả lập Referer để tránh bị 69shuba nghi ngờ bot cào
@@ -142,6 +127,7 @@ async def scrape_chapter_content(url: str):
         return None
     finally:
         await page.close()
+        
 async def scrape_stv_basic_info(url: str):
     url = urllib.parse.unquote(url).strip()
     context = await get_browser()
@@ -237,7 +223,6 @@ async def scrape_stv_chapter_content(url: str):
     url = urllib.parse.unquote(url).strip()
     path_parts = [p for p in url.split("/") if p]
     try:
-        # Giả định URL: https://sangtacviet.com/truyen/sangtac/1/47647/16/
         target_chap_id = path_parts[-1]
         source_type = path_parts[3]
     except:
@@ -246,12 +231,8 @@ async def scrape_stv_chapter_content(url: str):
 
     print(f"🚀 [START] Đang xử lý chương: {target_chap_id}")
     
-    # Lấy browser instance
-    existing_context = await get_browser()
-    browser = existing_context.browser 
-    
-    # 2. Tạo một context mới hoàn toàn (Incognito) để tránh dính Cookie/Session
-    context = await browser.new_context()
+    # Lấy global context đang chạy thay vì khởi tạo một browser object cồng kềnh mới
+    context = await get_browser()
     page = await context.new_page()
 
     captured_data = {"raw": None}
@@ -260,10 +241,8 @@ async def scrape_stv_chapter_content(url: str):
     async def handle_response(response):
         res_url = response.url
         if "sajax=readchapter" in res_url:
-            # Debug: Log ra các request API phát hiện được
             if target_chap_id in res_url:
                 try:
-                    # Đọc text và tìm JSON để tránh rác đầu chuỗi
                     text_res = await response.text()
                     start_idx = text_res.find('{"')
                     if start_idx != -1:
@@ -274,7 +253,6 @@ async def scrape_stv_chapter_content(url: str):
                 except Exception as e:
                     print(f"⚠️ [API ERROR] Lỗi xử lý response: {e}")
             else:
-                # Thông báo nếu bắt nhầm API của ID khác
                 print(f"⏭️ [SKIP] Bỏ qua API không khớp ID: {res_url[-30:]}")
 
     page.on("response", handle_response)
@@ -324,7 +302,6 @@ async def scrape_stv_chapter_content(url: str):
 
         if not found:
             print(f"❌ [TIMEOUT] Không bắt được dữ liệu cho chương {target_chap_id}")
-            # DEBUG: Chụp ảnh lúc bị timeout
             await page.screenshot(path=f"debug_{target_chap_id}_2_timeout.png")
             return None
 
@@ -335,12 +312,9 @@ async def scrape_stv_chapter_content(url: str):
         paragraphs = []
 
         if source_type == "sangtac":
-            # Nguồn sangtac: Tách dòng theo \n, giữ nguyên mọi ký tự
             paragraphs = [line.strip() for line in raw_data.split('\n') if line.strip()]
         else:
-            # Các nguồn khác: Giữ nguyên logic bóc thẻ <i> như cũ
             for section in raw_data.split('<p>'):
-                # Lấy text hiển thị trong các thẻ <i>
                 words = re.findall(r'>([^<]+)</i>', section)
                 if words:
                     line = " ".join(words).strip()
@@ -349,19 +323,13 @@ async def scrape_stv_chapter_content(url: str):
 
         return "\n\n".join(paragraphs)
 
-        print(f"🏁 [DONE] Hoàn tất: {len(paragraphs)} đoạn văn.")
-        return "\n\n".join(paragraphs)
-
     except Exception as e:
         print(f"🔥 [CRASH] Lỗi Scraper: {str(e)}")
-        # DEBUG: Chụp ảnh khi gặp lỗi crash
         await page.screenshot(path=f"debug_{target_chap_id}_crash.png")
         return None
     finally:
-        # QUAN TRỌNG: Gỡ listener và đóng context để giải phóng RAM
         page.remove_listener("response", handle_response)
         await page.close()
-        await context.close()
         print(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
     
 import datetime
@@ -374,31 +342,23 @@ async def scrape_qidian_ranking(
     month: str = None
 ):
     """
-    Hàm cào dữ liệu xếp hạng Qidian đa năng hoàn chỉnh:
-    - Đồng nhất 100% cấu trúc URL theo định dạng dòng thời gian (kể cả page 1).
-    - Hỗ trợ bộ lọc Năm (year) và Tháng (month) động truyền từ Frontend xuống.
+    Hàm cào dữ liệu xếp hạng Qidian - Sửa lỗi không tải được ở các lượt đầu.
     """
-    # 1. KIỂM TRA THỜI GIAN: Nếu không truyền, tự động lấy năm/tháng hiện tại làm mặc định
     now = datetime.datetime.now()
     final_year = year if year else now.strftime("%Y")
     final_month = month if month else now.strftime("%m")
     
-    # Đảm bảo tháng luôn có 2 chữ số (Ví dụ: khách truyền "5" -> chuyển thành "05")
     if len(final_month) == 1:
         final_month = f"0{final_month}"
 
-    # Định dạng chuỗi phân trang theo đúng yêu cầu: year2026-month05-page3
     page_str = f"year{final_year}-month{final_month}-page{page}"
 
-    # 2. ĐỒNG NHẤT ĐƯỜNG DẪN URL THEO ĐỊNH DẠNG DÒNG THỜI GIAN:
     if chn_id == -1:
-        # Nếu là -1 (Mục "Tất Cả")
         if category_id in ["signnewbook", "pubnewbook", "newauthor"]:
             url = f"https://www.qidian.com/rank/{category_id}/page/{page}/"
         else:
             url = f"https://www.qidian.com/rank/{category_id}/{page_str}/"
     else:
-        # Nếu là các thể loại cụ thể bao gồm cả VIP 新作 (chn_id >= 0)
         if category_id in ["signnewbook", "pubnewbook", "newauthor"]:
             url = f"https://www.qidian.com/rank/{category_id}/page/{page}/chn{chn_id}/"
         else:
@@ -406,35 +366,33 @@ async def scrape_qidian_ranking(
 
     print(f"\n[DEBUG] 1. Khởi tạo tài nguyên an toàn cho URL mục tiêu: {url}")
     
-    # Sử dụng đúng logic bóc tách thực thể Browser gốc giống hàm cào chương của bạn
-    existing_context = await get_browser()
-    browser = existing_context.browser 
-    
-    # Khởi tạo một context ẩn danh mới tinh để cô lập session
-    context = await browser.new_context()
+    context = await get_browser()
     page_ctx = await context.new_page()
     
-    # Chặn tải ảnh (png, jpg...) để tiết kiệm băng thông mạng và tăng tốc độ cào tối đa
-    await page_ctx.route("**/*.{png,jpg,jpeg,gif,svg}", lambda route: route.abort())
+    # Giữ nguyên phần chặn tài nguyên rác để tối ưu băng thông
+    await page_ctx.route(
+        "**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2,ttf,eot,ico}", 
+        lambda route: route.abort()
+    )
+    await page_ctx.route(
+        lambda url: "analytics" in url or "hm.baidu.com" in url, 
+        lambda route: route.abort()
+    )
 
     try:
-        print("[DEBUG] 2. Đang tải trang (Đợi hệ thống script chạy ngầm ổn định - networkidle)...")
-        await page_ctx.goto(url, wait_until="networkidle", timeout=30000)
+        print("[DEBUG] 2. Đang tải trang hỏa tốc (wait_until='commit')...")
+        await page_ctx.goto(url, wait_until="commit", timeout=25000)
         
-        print("[DEBUG] 3. Trang đã tải xong. Kiểm tra vùng hiển thị danh sách truyện...")
+        print("[DEBUG] 3. Đang chờ Javascript dựng danh sách truyện (Tối đa 15s, xong sớm đi sớm)...")
         
-        target_selector = ""
-        for selector in ['#book-img-text ul', '.rank-view-list', '.rank-body']:
-            try:
-                await page_ctx.wait_for_selector(selector, timeout=5000)
-                target_selector = selector
-                print(f" -> [OK] Đã phát hiện thấy vùng dữ liệu thông qua Selector: '{selector}'")
-                break
-            except Exception:
-                continue
-
-        if not target_selector:
-            print(" -> [FAIL] Không tìm thấy vùng hiển thị. Qidian có thể đã chặn IP hoặc không có dữ liệu lịch sử cho tháng này.")
+        # SỬA Ở ĐÂY: Nhắm thẳng vào danh sách thẻ 'li' cụ thể bên trong ul để chắc chắn dữ liệu đã render xong
+        # Đồng thời nâng timeout lên 15 giây để bù đắp cho những lần mạng lag, tránh bị fail oan.
+        target_selector = '#book-img-text ul li, .rank-view-list ul li, .rank-body ul li'
+        try:
+            await page_ctx.wait_for_selector(target_selector, timeout=15000)
+            print(" -> [OK] Cấu trúc truyện đã được render hoàn tất!")
+        except Exception:
+            print(" -> [FAIL] Quá thời gian chờ. JS không render được danh sách truyện hoặc bị Cloudflare chặn.")
             return []
 
         print("[DEBUG] 4. Bắt đầu chạy JavaScript thực thi bóc tách dữ liệu...")
@@ -474,6 +432,5 @@ async def scrape_qidian_ranking(
         return []
         
     finally:
-        print("[DEBUG] 6. Đóng tab và giải phóng context cô lập.")
+        print("[DEBUG] 6. Đóng tab cô lập.")
         await page_ctx.close()
-        await context.close()
