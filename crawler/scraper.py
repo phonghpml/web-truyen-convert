@@ -3,7 +3,6 @@ import json
 import re
 import urllib.parse
 from playwright.async_api import async_playwright
-# IMPORT THEO ĐÚNG TÀI LIỆU CHÍNH THỨC CỦA CLOAKBROWSER
 import cloakbrowser
 
 # Biến toàn cục để tái sử dụng tài nguyên
