@@ -9,7 +9,7 @@ from playwright.async_api import async_playwright
 _context = None
 _browser = None
 
-
+# test
 
 # SỬA ĐỔI HÀM KHỞI TẠO THEO CHUẨN ASYNC CỦA CLOAKBROWSER
 # async def get_browser():

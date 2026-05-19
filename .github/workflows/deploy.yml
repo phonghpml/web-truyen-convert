@@ -31,4 +31,4 @@ jobs:
           
           # 4. Ép buộc đẩy lên Hugging Face (Dùng -f)
           # Lưu ý: nhánh mặc định của 'git init' thường là 'master', nên ta đẩy master:main
-          git push -f https://Phonghp:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Phonghp/crawler_web_truyen master:main
+          git push -f https://Phonghp:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Phonghp/crawler master:main
