@@ -3,32 +3,62 @@ import json
 import re
 import urllib.parse
 from playwright.async_api import async_playwright
-import cloakbrowser
+# import cloakbrowser
 
 # Biến toàn cục để tái sử dụng tài nguyên
 _context = None
+_browser = None
+
 
 
 # SỬA ĐỔI HÀM KHỞI TẠO THEO CHUẨN ASYNC CỦA CLOAKBROWSER
+# async def get_browser():
+#     global _context
+#     if _context is None:
+#         print("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
+#         try:
+#             # Sử dụng hàm bất đồng bộ gốc của CloakBrowser để tạo thẳng context ẩn danh
+#             # Mọi cấu hình chống chặn bot (Blink, Webdriver, Fingerprint C++) đã được xử lý ở tầng C++ của binary
+#             _context = await cloakbrowser.launch_context_async(
+#                 headless=True,
+#                 viewport={'width': 1280, 'height': 720},
+#                 locale="vi-VN",
+#                 timezone_id="Asia/Ho_Chi_Minh"
+#             )
+#             print("✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công!")
+#         except Exception as e:
+#             print(f"❌ Lỗi cấu hình cloakbrowser: {e}")
+#             raise e
+#     return _context
 async def get_browser():
-    global _context
-    if _context is None:
-        print("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
-        try:
-            # Sử dụng hàm bất đồng bộ gốc của CloakBrowser để tạo thẳng context ẩn danh
-            # Mọi cấu hình chống chặn bot (Blink, Webdriver, Fingerprint C++) đã được xử lý ở tầng C++ của binary
-            _context = await cloakbrowser.launch_context_async(
-                headless=True,
-                viewport={'width': 1280, 'height': 720},
-                locale="vi-VN",
-                timezone_id="Asia/Ho_Chi_Minh"
-            )
-            print("✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công!")
-        except Exception as e:
-            print(f"❌ Lỗi cấu hình cloakbrowser: {e}")
-            raise e
+    global _browser, _context
+    if _browser is None:
+        pw = await async_playwright().start()
+        _browser = await pw.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                # GIẤU DẤU VẾT BOT (QUAN TRỌNG NHẤT)
+                "--disable-blink-features=AutomationControlled", 
+                "--disable-infobars",
+                "--window-position=0,0",
+                "--ignore-certificate-errors",
+            ]
+        )
+        _context = await _browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            viewport={'width': 1280, 'height': 720},
+            locale="vi-VN",
+            timezone_id="Asia/Ho_Chi_Minh"
+        )
+        
+        # XOÁ DẤU VẾT WEBDRIVER TRÊN TOÀN BỘ TRANG
+        await _context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = { runtime: {} };
+        """)
     return _context
-
 
 async def scrape_basic_info(url: str):
     url = urllib.parse.unquote(url) # Fix lỗi link mã hóa gây 400
