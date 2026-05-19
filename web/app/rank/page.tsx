@@ -53,6 +53,7 @@ const RANK_CATEGORIES = [
 ];
 
 // DANH MỤC MÃ THỂ LOẠI ĐỒNG BỘ CHUẨN BACKEND & QIDIAN
+// test
 const BOOK_CATEGORIES = [
   { id: -1, name: 'Tất Cả' },
   { id: 21, name: 'Huyền Huyễn' },
