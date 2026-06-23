@@ -12,3 +12,5 @@ Dự án Crawler và Convert truyện chữ tự động.
 - Framework: FastAPI
 - Engine: Playwright (Chromium)
 - Translator: Aho-Corasick (1.4M phrases)
+source venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
