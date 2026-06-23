@@ -160,23 +160,18 @@ function RankContent() {
     }
   }, [currentType, currentChn, currentPage, currentYear, currentMonth, searchParams]);
 
-  // HÀM CHUYỂN TRỰC TIẾP SANG SÁNG TÁC VIỆT THEO ĐÚNG CẤU TRÚC LINK MẪU
+  // HÀM CHUYỂN TRỰC TIẾP SANG SÁNG TÁC VIỆT
   const handleNavigateToSangTacViet = (book: BookItem) => {
-    // Luồng dự phòng nếu không tìm thấy ID số từ link gốc Qidian
     let targetUrl = `https://sangtacviet.com/truyen/?find=${encodeURIComponent(book.title)}`;
 
     if (book.sourceUrl) {
-      // Trích xuất chuỗi chữ số ID từ định dạng /book/1049157883/ hoặc tương tự
       const idMatch = book.sourceUrl.match(/book\/(\d+)/);
-      
       if (idMatch && idMatch[1]) {
         const qidianId = idMatch[1];
-        // Áp dụng chuẩn xác cấu trúc link mẫu sangtacviet.com của bạn
         targetUrl = `https://sangtacviet.com/truyen/qidian/1/${qidianId}/`;
       }
     }
 
-    // Mở tab mới dẫn trực tiếp tới trang truyện trên SangTacViet
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -348,19 +343,19 @@ function RankContent() {
 
                         {/* Khối thông tin */}
                         <div className="flex flex-col justify-between flex-1 min-w-0 min-h-[96px] sm:min-h-[112px]">
-                          <div className="space-y-1">
+                          <div className="space-y-1 w-full">
                             {/* Tên truyện */}
                             <h3 className="font-bold text-sm md:text-base text-zinc-100 whitespace-normal sm:truncate group-hover:text-orange-500 transition-colors tracking-tight leading-snug">
                               {book.title}
                             </h3>
                             
-                            {/* Tác giả & Thể loại */}
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] md:text-xs text-zinc-400">
-                              <span className="font-medium flex items-center gap-1 max-w-[140px] sm:max-w-none truncate">
+                            {/* TÁC GIẢ & THỂ LOẠI (ĐÃ FIX: Chuyển flex-col trên mobile để chống tràn/mất text) */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-0.5 text-[11px] md:text-xs text-zinc-400 w-full">
+                              <span className="font-medium flex items-center gap-1 text-zinc-300 sm:text-zinc-400 break-all sm:break-normal">
                                 <User size={11} className="text-zinc-600 shrink-0" /> {book.author}
                               </span>
-                              <span className="text-zinc-800">|</span>
-                              <span className="text-zinc-500 flex items-center gap-1 max-w-[140px] sm:max-w-none truncate">
+                              <span className="text-zinc-800 hidden sm:inline">|</span>
+                              <span className="text-zinc-500 flex items-center gap-1 sm:truncate">
                                 <Layers size={11} className="text-zinc-700 shrink-0" /> {book.category}
                               </span>
                             </div>
@@ -389,7 +384,6 @@ function RankContent() {
 
                           {/* Chân thẻ */}
                           <div className="border-t border-zinc-900/80 pt-2 mt-2.5 flex items-center justify-between text-[10px] md:text-[11px] font-mono text-zinc-600 gap-4 w-full">
-                            {/* CỔNG GỐC: Bấm vào mở tab mới đến thẳng Qidian Trung Quốc */}
                             <span className="truncate">
                               Cổng gốc:{' '}
                               <a 
@@ -403,7 +397,6 @@ function RankContent() {
                               </a>
                             </span>
 
-                            {/* XEM CHI TIẾT: Bấm vào chữ hoặc vùng thẻ đều nhảy trực tiếp sang SangTacViet */}
                             <span className="text-zinc-500 group-hover:text-orange-500 text-[9px] md:text-[10px] uppercase tracking-tighter transition-colors flex items-center gap-0.5 shrink-0 font-bold">
                               Xem chi tiết <ChevronRight size={10} />
                             </span>
