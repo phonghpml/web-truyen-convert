@@ -104,7 +104,6 @@ function RankContent() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isLastPage, setIsLastPage] = useState<boolean>(false);
 
-  // State theo dõi slug nào đang được mở rộng mô tả đầy đủ
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
   const yearsList = Array.from({ length: new Date().getFullYear() - 2020 + 1 }, (_, i) => (2020 + i).toString()).reverse();
@@ -160,7 +159,6 @@ function RankContent() {
     }
   }, [currentType, currentChn, currentPage, currentYear, currentMonth, searchParams]);
 
-  // HÀM CHUYỂN TRỰC TIẾP SANG SÁNG TÁC VIỆT
   const handleNavigateToSangTacViet = (book: BookItem) => {
     let targetUrl = `https://sangtacviet.com/truyen/?find=${encodeURIComponent(book.title)}`;
 
@@ -180,7 +178,6 @@ function RankContent() {
       <Navbar session={session} />
 
       <div className="py-4 md:py-8">
-        {/* TIÊU ĐỀ PHÂN ĐOẠN ĐỘNG */}
         <div className="mb-4 md:mb-6 pb-4 border-b border-zinc-900 flex items-baseline gap-3">
           <h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase italic">
             {getActiveRankMeta().name}
@@ -190,10 +187,8 @@ function RankContent() {
           </span>
         </div>
 
-        {/* CẤU TRÚC CHIA HAI CỘT CHUẨN TRANG CHỦ QIDIAN */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
           
-          {/* CỘT TRÁI: SIDEBAR LỰA CHỌN DANH MỤC */}
           <aside className="w-full lg:w-64 shrink-0 flex flex-row lg:flex-col gap-4 overflow-x-auto lg:overflow-x-visible pb-3 lg:pb-0 scrollbar-none lg:sticky lg:top-20 snap-x">
             {RANK_CATEGORIES.map((group, groupIdx) => (
               <div key={groupIdx} className="bg-[#111111] rounded-lg border border-zinc-900 overflow-hidden min-w-[240px] md:min-w-[280px] lg:min-w-0 flex-1 lg:flex-none snap-start">
@@ -233,10 +228,8 @@ function RankContent() {
             ))}
           </aside>
 
-          {/* CỘT PHẢI: CHI TIẾT DANH SÁCH BẢNG XẾP HẠNG TRUYỆN */}
           <main className="flex-1 w-full flex flex-col gap-4 md:gap-5">
             
-            {/* THANH CHỌN NHANH BỘ LỌC */}
             <div className="bg-[#111111] border border-zinc-900 rounded-lg p-2 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
               <div className="flex items-center gap-1.5 border-b sm:border-b-0 sm:border-r border-zinc-900 pb-2 sm:pb-0 sm:pr-3 shrink-0">
                 <select
@@ -282,7 +275,6 @@ function RankContent() {
               </div>
             </div>
 
-            {/* BLOCK HIỂN THỊ DANH SÁCH TRUYỆN VÀ PHÂN TRANG */}
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-32 bg-[#111111] rounded-xl border border-zinc-900">
                 <Loader2 className="w-5 h-5 text-orange-500 animate-spin mb-3" />
@@ -316,15 +308,12 @@ function RankContent() {
                       onClick={() => handleNavigateToSangTacViet(book)}
                       className="p-3 md:p-4 bg-[#111111] border border-zinc-900 rounded-xl hover:border-orange-500/30 transition-all duration-200 group relative overflow-hidden cursor-pointer block w-full"
                     >
-                      {/* Thứ hạng động */}
                       <div className={`absolute top-0 left-0 w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-br-lg text-[10px] md:text-xs font-mono ${rankBadgeColor} shadow-md z-10`}>
                         {dynamicRank}
                       </div>
 
-                      {/* Layout linh hoạt */}
                       <div className="flex flex-row items-start gap-3 md:gap-5 w-full">
                         
-                        {/* Ảnh bìa */}
                         <div className="w-16 h-24 sm:w-20 sm:h-28 bg-zinc-900 rounded-md overflow-hidden shrink-0 shadow-lg border border-zinc-900/50">
                           {book.coverUrl ? (
                             <img 
@@ -341,15 +330,12 @@ function RankContent() {
                           )}
                         </div>
 
-                        {/* Khối thông tin */}
                         <div className="flex flex-col justify-between flex-1 min-w-0 min-h-[96px] sm:min-h-[112px]">
                           <div className="space-y-1 w-full">
-                            {/* Tên truyện */}
                             <h3 className="font-bold text-sm md:text-base text-zinc-100 whitespace-normal sm:truncate group-hover:text-orange-500 transition-colors tracking-tight leading-snug">
                               {book.title}
                             </h3>
                             
-                            {/* TÁC GIẢ & THỂ LOẠI (ĐÃ FIX: Chuyển flex-col trên mobile để chống tràn/mất text) */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-0.5 text-[11px] md:text-xs text-zinc-400 w-full">
                               <span className="font-medium flex items-center gap-1 text-zinc-300 sm:text-zinc-400 break-all sm:break-normal">
                                 <User size={11} className="text-zinc-600 shrink-0" /> {book.author}
@@ -360,7 +346,6 @@ function RankContent() {
                               </span>
                             </div>
                             
-                            {/* Mô tả truyện */}
                             <div className="text-[11px] md:text-xs text-zinc-400 leading-relaxed pt-0.5 break-words">
                               <p className={`transition-all duration-200 ${isExpanded ? '' : 'line-clamp-2 sm:line-clamp-3'}`}>
                                 {book.intro}
@@ -382,10 +367,9 @@ function RankContent() {
                             </div>
                           </div>
 
-                          {/* Chân thẻ */}
+                          {/* PHẦN CHÂN THẺ: Đã cập nhật text hiển thị theo yêu cầu */}
                           <div className="border-t border-zinc-900/80 pt-2 mt-2.5 flex items-center justify-between text-[10px] md:text-[11px] font-mono text-zinc-600 gap-4 w-full">
                             <span className="truncate">
-                              Cổng gốc:{' '}
                               <a 
                                 href={book.sourceUrl || "https://www.qidian.com"} 
                                 target="_blank" 
@@ -393,12 +377,12 @@ function RankContent() {
                                 onClick={(e) => e.stopPropagation()} 
                                 className="text-orange-500/80 hover:text-orange-500 font-sans text-[11px] md:text-xs underline decoration-dashed underline-offset-2 font-medium"
                               >
-                                Qidian Chinh Văn
+                                Xem trên Qidian
                               </a>
                             </span>
 
                             <span className="text-zinc-500 group-hover:text-orange-500 text-[9px] md:text-[10px] uppercase tracking-tighter transition-colors flex items-center gap-0.5 shrink-0 font-bold">
-                              Xem chi tiết <ChevronRight size={10} />
+                              Xem trên STV <ChevronRight size={10} />
                             </span>
                           </div>
                         </div>
@@ -408,7 +392,6 @@ function RankContent() {
                   );
                 })}
 
-                {/* HỆ THỐNG ĐIỀU HƯỚNG PHÂN TRANG */}
                 <div className="flex items-center justify-center gap-5 mt-4 pt-4 border-t border-zinc-900/60 select-none">
                   <button 
                     disabled={currentPage === 1 || isLoading}
