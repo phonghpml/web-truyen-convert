@@ -1,9 +1,9 @@
-name: Deploy Crawler to HF
+name: Deploy Backend to HF
 on:
   push:
     branches: [main] 
     paths:
-      - 'crawler/**' # Chỉ chạy khi có thay đổi trong thư mục crawler
+      - 'backend/**' # Chỉ chạy khi có thay đổi trong thư mục backend
 
 jobs:
   deploy:
@@ -13,12 +13,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push Crawler Folder to Hugging Face
+      - name: Push Backend Folder to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # 1. Đi vào thư mục crawler
-          cd crawler
+          # 1. Đi vào thư mục backend
+          cd backend
           
           # 2. Khởi tạo Git mới tại đây để xóa sạch lịch sử file > 10MB
           git init
