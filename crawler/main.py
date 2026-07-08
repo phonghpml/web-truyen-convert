@@ -1,25 +1,32 @@
-from fastapi import FastAPI, HTTPException, Query # Thêm Query
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse # Thêm dòng này
+from fastapi.responses import StreamingResponse
 import database as db_mod
 import scraper as scr
 import translator_utils as tr
-import edge_tts # Thêm dòng này
-import re # Thêm dòng này
+import edge_tts
+import re
 from datetime import datetime
 from contextlib import asynccontextmanager
 from slugify import slugify
 import random
+from routes.auth import router as auth_router
+from routes.user import router as user_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Hệ thống Convert đã sẵn sàng với 1.4 triệu cụm từ!")
     # Đảm bảo nạp từ điển vào RAM từ đây
-    tr.translator.load_all_dicts() 
+    tr.translator.load_all_dicts()
+    await db_mod.connect()
     yield
-    if scr._browser:
-        await scr._browser.close()
+    try:
+        await scr.close_browser()
+    except Exception as e:
+        print(f"⚠️ Lỗi khi đóng browser context: {e}")
+    await db_mod.disconnect()
     print("💤 Hệ thống đang đóng...")
 
 app = FastAPI(lifespan=lifespan)
@@ -31,6 +38,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+app.include_router(user_router)
 
 class TranslationRequest(BaseModel):
     url: str
@@ -48,6 +58,88 @@ def generate_unique_slug(title: str) -> str:
     base_slug = slugify(title)
     suffix = str(random.randint(1000, 9999))  # 4 số ngẫu nhiên
     return f"{base_slug}-{suffix}"
+
+
+@app.get("/books")
+async def api_list_books(
+    slug: Optional[str] = None,
+    source_url: Optional[str] = None,
+    id: Optional[str] = None,
+    limit: int = 12,
+    skip: int = 0,
+    q: Optional[str] = None,
+):
+    try:
+        if slug:
+            book = await db_mod.client.book.find_unique(where={"slug": slug})
+            if not book:
+                return {"success": True, "data": []}
+            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
+            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
+            return {"success": True, "data": [db_mod.serialize_book_row(book, chapters_count)]}
+
+        if source_url:
+            book = await db_mod.client.book.find_unique(where={"source_url": source_url})
+            if not book:
+                return {"success": True, "data": []}
+            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
+            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
+            return {"success": True, "data": [db_mod.serialize_book_row(book, chapters_count)]}
+
+        if id:
+            book = await db_mod.client.book.find_unique(where={"id": id})
+            if not book:
+                return {"success": True, "data": []}
+            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
+            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
+            return {"success": True, "data": [db_mod.serialize_book_row(book, chapters_count)]}
+
+        where_clause = {}
+        if q and q.strip():
+            where_clause = {
+                "OR": [
+                    {"title_vi": {"contains": q, "mode": "insensitive"}},
+                    {"title_en": {"contains": q, "mode": "insensitive"}},
+                ]
+            }
+
+        books = await db_mod.client.book.find_many(
+            where=where_clause,
+            order={"updatedAt": "desc"},
+            skip=skip,
+            take=limit,
+        )
+
+        payload = []
+        for book in books:
+            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
+            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
+            payload.append(db_mod.serialize_book_row(book, chapters_count))
+
+        total = await db_mod.client.book.count(where=where_clause)
+        return {"success": True, "data": payload, "total": total, "limit": limit, "skip": skip}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/books/search")
+async def api_search_books(q: str = Query(...)):
+    return await api_list_books(q=q, limit=10, skip=0)
+
+
+@app.get("/chapters")
+async def api_list_chapters(book: Optional[str] = None):
+    if not book:
+        raise HTTPException(status_code=400, detail="Missing book parameter")
+
+    try:
+        chapters = await db_mod.client.chapter.find_many(
+            where={"book_source_url": book},
+            order={"chapter_no": "asc"},
+        )
+        return {"success": True, "data": [db_mod.serialize_chapter_row(ch) for ch in chapters]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- CÁC API ENDPOINTS GIỮ NGUYÊN ---
@@ -143,7 +235,7 @@ async def api_get_info(request: TranslationRequest):
             "slug": generate_unique_slug(title_translated)
         }
     
-    db_mod.save_book(book_data)
+    await db_mod.save_book(book_data)
     return {"success": True, "data": book_data}
 
 # --- Cập nhật endpoint /get-chapters ---
@@ -173,12 +265,11 @@ async def api_get_chapters(request: TranslationRequest):
                 "slug": generate_unique_slug(title_final)
             })
         
-        db_mod.save_chapters(request.url, translated_chapters)
+        await db_mod.save_chapters(request.url, translated_chapters)
         return {"success": True, "total": len(translated_chapters), "chapters": translated_chapters}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-from fastapi import HTTPException
 
 @app.get("/get-qidian-rank")
 async def api_get_qidian_rank(
@@ -223,15 +314,15 @@ async def api_get_qidian_rank(
             
             # 3. Tạo cấu trúc key phẳng, chuẩn camelCase khớp 100% với file page.tsx của Next.js
             translated_results.append({
-                "rank": book['rank'],
-                "title": title_vi if title_vi else book['title_cn'],  # Ưu tiên hiển thị tên Việt
-                "title_cn": book['title_cn'],                         # Giữ lại tên gốc để làm tính năng khác (như tìm nguồn shuba)
+                "rank": getattr(book, 'rank', None) if not isinstance(book, dict) else book['rank'],
+                "title": title_vi if title_vi else (getattr(book, 'title_cn', None) if not isinstance(book, dict) else book['title_cn']),
+                "title_cn": getattr(book, 'title_cn', None) if not isinstance(book, dict) else book['title_cn'],
                 "author": author_vi if author_vi else "Ẩn danh",
                 "category": category_vi if category_vi else "Chưa phân loại",
                 "intro": desc_vi if desc_vi else "Chưa có tóm tắt cốt truyện...",
-                "coverUrl": book['cover_url'],                        # Map từ cover_url sang coverUrl
-                "sourceUrl": book['source_url'],                      # Map từ source_url sang sourceUrl
-                "slug": generate_unique_slug(title_vi if title_vi else book['title_cn'])  # Tạo slug định danh
+                "coverUrl": getattr(book, 'cover_url', None) if not isinstance(book, dict) else book['cover_url'],
+                "sourceUrl": getattr(book, 'source_url', None) if not isinstance(book, dict) else book['source_url'],
+                "slug": generate_unique_slug(title_vi if title_vi else (getattr(book, 'title_cn', None) if not isinstance(book, dict) else book['title_cn']))
             })
 
         # 4. Bọc đúng 2 lớp .data.data để tương thích hoàn toàn với logic check bên Next.js

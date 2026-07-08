@@ -1,9 +1,12 @@
 fastapi
 uvicorn
 playwright
-pymongo
+prisma
+psycopg2-binary
 python-dotenv
 pyahocorasick
+email-validator
+bcrypt
 gunicorn
 edge-tts
 python-slugify

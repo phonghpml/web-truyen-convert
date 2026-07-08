@@ -6,16 +6,18 @@ import { ChapterList } from "@/components/ui/ChapterList";
 // BỎ: import ReaderModal from "@/components/ui/ReaderModal"; 
 import { MESSAGES } from "@/lib/constants";
 import { fetchBook, fetchChapters } from "@/lib/hooks";
-import { Book, Chapter } from "@/lib/types";
-import { useSession } from "next-auth/react";
+import { CRAWLER_BASE_URL } from "@/lib/constants";
+import { ApiResponse, Book, Chapter, LibraryStatusResponse, ReadingHistory } from "@/lib/types";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useAuth } from "@/lib/useAuth";
+import { getReadingHistory, getLibraryStatus, toggleLibrary } from "@/lib/auth";
 
 export default function BookDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
-  const { data: session } = useSession();
+  const { user } = useAuth();
 
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -50,24 +52,37 @@ export default function BookDetailsPage() {
 
       setBook(bookData);
 
-      const promises = [
-        bookData.source_url ? fetchChapters(bookData.source_url) : Promise.resolve({ chapters: [] }),
-        bookData.source_url ? fetch(`/api/user/history?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null),
-        (bookData.source_url && session) ? fetch(`/api/user/library?book_url=${encodeURIComponent(bookData.source_url)}`).then(r => r.json()) : Promise.resolve(null)
-      ];
+      const chapterPromise: Promise<{ chapters: Chapter[]; error: string | null }> =
+        bookData.source_url
+          ? fetchChapters(bookData.source_url)
+          : Promise.resolve({ chapters: [], error: null });
 
-      const [chaptersRes, historyRes, libraryRes] = await Promise.all(promises);
+      const historyPromise =
+        bookData.source_url && user
+          ? getReadingHistory(bookData.source_url)
+          : Promise.resolve({ success: false } as ApiResponse<ReadingHistory>);
+
+      const libraryPromise =
+        bookData.source_url && user
+          ? getLibraryStatus(bookData.source_url)
+          : Promise.resolve({ success: false, isSaved: false } as LibraryStatusResponse);
+
+      const [chaptersRes, historyRes, libraryRes] = await Promise.all([
+        chapterPromise,
+        historyPromise,
+        libraryPromise,
+      ]);
 
       if (chaptersRes.chapters) setChapters(chaptersRes.chapters);
       if (historyRes?.success) setSavedHistory(historyRes.data);
-      if (libraryRes) setIsSaved(libraryRes.isSaved);
+      if (libraryRes?.success) setIsSaved(!!libraryRes.data?.isSaved);
 
     } catch (err) {
       setError(MESSAGES.ERROR_BOOK_DETAILS);
     } finally {
       setLoading(false);
     }
-  }, [slug, session]);
+  }, [slug, user]);
 
   useEffect(() => {
     loadAllData();
@@ -77,7 +92,7 @@ export default function BookDetailsPage() {
     if (!book?.source_url) return;
     setIsUpdating(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_CRAWLER_URL}/get-chapters`, {
+      const response = await fetch(`${CRAWLER_BASE_URL}/get-chapters`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: book.source_url })
@@ -92,30 +107,43 @@ export default function BookDetailsPage() {
   };
 
   const handleSaveToLibrary = async () => {
-    if (!session) return alert("Vui lòng đăng nhập!");
-    const res = await fetch("/api/user/library", {
-      method: "POST",
-      body: JSON.stringify({
-        book_url: book?.source_url,
-        title_vi: book?.title_vi,
-        cover_url: book?.cover_url
-      })
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const data = await toggleLibrary({
+      book_url: book?.source_url || "",
+      title_vi: book?.title_vi || "",
+      cover_url: book?.cover_url,
     });
-    const data = await res.json();
-    setIsSaved(data.isSaved);
+
+    if (data.success) {
+      setIsSaved(!!data.isSaved);
+    } else {
+      alert(data.error || "Không thể cập nhật tủ sách");
+    }
   };
 
   const firstChapter = useMemo(() => {
     if (chapters.length === 0) return null;
-    return [...chapters].sort((a, b) =>
-      (a.title_vi.match(/\d+/) || 0) - (b.title_vi.match(/\d+/) || 0)
-    )[0];
+
+    const parseChapterNumber = (chapter: Chapter) => {
+      if (typeof chapter.chapter_no === "number") {
+        return chapter.chapter_no;
+      }
+      const title = chapter.title_vi || chapter.title || "";
+      const match = title.match(/\d+(?:\.\d+)?/);
+      return match ? parseFloat(match[0]) : Number.POSITIVE_INFINITY;
+    };
+
+    return [...chapters].sort((a, b) => parseChapterNumber(a) - parseChapterNumber(b))[0];
   }, [chapters]);
 
   return (
     <main className="min-h-screen bg-black text-white font-mono p-4 md:p-6">
       <div className="max-w-5xl mx-auto w-full">
-        <Navbar session={session} onHomeClick={() => router.push("/")} />
+        <Navbar onHomeClick={() => router.push("/")} />
 
         <div className="mt-8 md:mt-12 space-y-6 md:space-y-8">
           {loading ? (

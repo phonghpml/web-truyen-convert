@@ -1,14 +1,19 @@
 // Environment constants
-export const API_BASE_URL = "/api";
 export const CRAWLER_BASE_URL = process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000";
 
 // API Endpoints
 export const ENDPOINTS = {
-  BOOKS: `${API_BASE_URL}/books`,
-  BOOKS_SEARCH: `${API_BASE_URL}/books/search`,
-  CHAPTERS: `${API_BASE_URL}/chapters`,
+  BOOKS: `${CRAWLER_BASE_URL}/books`,
+  BOOKS_SEARCH: `${CRAWLER_BASE_URL}/books/search`,
+  CHAPTERS: `${CRAWLER_BASE_URL}/chapters`,
   CRAWLER_INFO: `${CRAWLER_BASE_URL}/get-basic-info`,
   CRAWLER_CHAPTERS: `${CRAWLER_BASE_URL}/get-chapters`,
+  AUTH_REGISTER: `${CRAWLER_BASE_URL}/auth/register`,
+  AUTH_LOGIN: `${CRAWLER_BASE_URL}/auth/login`,
+  AUTH_ME: `${CRAWLER_BASE_URL}/auth/me`,
+  USER_HISTORY: `${CRAWLER_BASE_URL}/user/history`,
+  USER_LIBRARY: `${CRAWLER_BASE_URL}/user/library`,
+  USER_LIBRARY_LIST: `${CRAWLER_BASE_URL}/user/library/list`,
 };
 
 // UI Constants
@@ -28,15 +33,3 @@ export const MESSAGES = {
   ERROR_CONVERT: "Lỗi convert truyện. Kiểm tra lại URL",
   NO_BOOK_FOUND: "Không tìm thấy truyện",
 };
-
-
-// MongoDB Constants
-export const DB = {
-  URI: process.env.MONGODB_URI!,
-  NAME: "web_truyen",
-  BOOKS_COLLECTION: "books",
-  USERS_COLLECTION: "users",
-  CHAPTERS_COLLECTION: "chapters",
-  HISTORY_COLLECTION: "reading_history",
-  LIBRARY_COLLECTION: "user_library",
-}

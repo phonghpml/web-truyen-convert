@@ -2,29 +2,23 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { handleSignOut } from "@/app/actions";
 import { Bookmark, LogOut, User, Home, Loader2, ChevronDown, Settings, Trophy } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/lib/useAuth";
 import { useState, useRef, useEffect } from "react";
 
 interface NavbarProps {
-  session?: any;
   onHomeClick?: () => void;
 }
 
-export const Navbar = ({ session: initialSession, onHomeClick }: NavbarProps) => {
+export const Navbar = ({ onHomeClick }: NavbarProps) => {
   const router = useRouter();
-  const pathname = usePathname(); // Thêm hook để nhận diện tab active
-  const { data: session, status } = useSession();
+  const pathname = usePathname();
+  const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  
-  const currentSession = session || initialSession;
-  const isLoading = status === "loading";
+  const isLoading = false;
 
-  const displayName = currentSession?.user?.name || 
-                      currentSession?.user?.email?.split('@')[0] || 
-                      "Guest";
+  const displayName = user?.name || user?.email?.split('@')[0] || "Guest";
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -72,18 +66,14 @@ export const Navbar = ({ session: initialSession, onHomeClick }: NavbarProps) =>
           <div className="flex items-center gap-2 bg-zinc-900/50 px-4 py-2 rounded-full border border-zinc-800 animate-pulse">
             <Loader2 size={12} className="animate-spin text-zinc-600" />
           </div>
-        ) : currentSession ? (
+        ) : user ? (
           <>
             <button 
               onClick={() => setIsOpen(!isOpen)}
               className="flex items-center gap-2 md:gap-3 bg-zinc-900/80 p-1 pr-2 md:pr-4 rounded-full border border-zinc-800 hover:border-orange-500/50 transition-all active:scale-95 shadow-lg"
             >
               <div className="w-8 h-8 rounded-full border border-orange-500/50 overflow-hidden bg-black flex items-center justify-center shrink-0">
-                {currentSession.user?.image ? (
-                  <img src={currentSession.user.image} alt="avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <User size={14} className="text-orange-500" />
-                )}
+                <User size={14} className="text-orange-500" />
               </div>
               
               <div className="hidden sm:flex flex-col items-start leading-none max-w-[120px]">
@@ -100,7 +90,7 @@ export const Navbar = ({ session: initialSession, onHomeClick }: NavbarProps) =>
               <div className="absolute right-0 mt-3 w-52 bg-zinc-950 border border-zinc-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[60]">
                 <div className="p-3 border-b border-zinc-900 bg-zinc-900/30">
                   <p className="text-[7px] text-zinc-500 uppercase font-black tracking-[0.2em]">User Profile Context</p>
-                  <p className="text-[10px] text-zinc-300 font-bold truncate mt-1">{currentSession.user?.email}</p>
+                  <p className="text-[10px] text-zinc-300 font-bold truncate mt-1">{user.email}</p>
                 </div>
                 
                 <div className="flex flex-col p-1.5">
@@ -124,15 +114,17 @@ export const Navbar = ({ session: initialSession, onHomeClick }: NavbarProps) =>
 
                   <div className="h-[1px] bg-zinc-900 my-1.5 mx-2" />
 
-                  <form action={handleSignOut} className="w-full">
-                    <button 
-                      type="submit"
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-[11px] font-bold text-zinc-500 hover:text-red-500 hover:bg-red-500/5 transition-all rounded-lg uppercase tracking-tight"
-                    >
-                      <LogOut size={14} />
-                      Đăng xuất (Logout)
-                    </button>
-                  </form>
+                  <button 
+                    onClick={() => {
+                      setIsOpen(false);
+                      signOut();
+                      router.push("/login");
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-[11px] font-bold text-zinc-500 hover:text-red-500 hover:bg-red-500/5 transition-all rounded-lg uppercase tracking-tight"
+                  >
+                    <LogOut size={14} />
+                    Đăng xuất
+                  </button>
                 </div>
               </div>
             )}

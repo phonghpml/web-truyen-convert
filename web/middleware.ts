@@ -1,9 +1,10 @@
-import NextAuth from "next-auth";
-import { authConfig } from "./auth.config";
+import { NextResponse } from "next/server";
 
-export default NextAuth(authConfig).auth;
+// Middleware hiện tạm thời chỉ là no-op để tránh bundling Prisma/pg vào edge runtime.
+export default function middleware() {
+  return NextResponse.next();
+}
 
 export const config = {
-  // Những đường dẫn nào bắt buộc phải đăng nhập mới được xem
-  matcher:["/((?!api|_next/static|_next/image|favicon.ico|login|register).*)"],
-}
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|login|register).*)"],
+};

@@ -1,20 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Navbar } from "@/components/layout/Navbar";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/lib/useAuth";
 import Link from "next/link";
 import { Bookmark, Trash2, BookOpen, Loader2 } from "lucide-react";
+import { getLibraryList, toggleLibrary } from "@/lib/auth";
 
 export default function LibraryPage() {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 1. Hàm lấy danh sách truyện đã lưu
   const fetchLibrary = async () => {
     try {
-      const res = await fetch("/api/user/library/list");
-      const result = await res.json();
+      const result = await getLibraryList();
       setBooks(result.data || []);
     } catch (error) {
       console.error("Lỗi tải tủ sách:", error);
@@ -24,28 +24,35 @@ export default function LibraryPage() {
   };
 
   useEffect(() => {
-    if (session) fetchLibrary();
-  }, [session]);
+    if (user) {
+      fetchLibrary();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   // 2. Hàm xóa nhanh truyện khỏi tủ sách
-  const handleRemove = async (book_url: string) => {
+  const handleRemove = async (book: any) => {
     if (!confirm("Xóa truyện này khỏi tủ sách?")) return;
-    
+
     try {
-      const res = await fetch("/api/user/library", {
-        method: "POST",
-        body: JSON.stringify({ book_url })
+      const res = await toggleLibrary({
+        book_url: book.book_url,
+        title_vi: book.title_vi,
+        cover_url: book.cover_url,
       });
-      if (res.ok) {
-        // Cập nhật lại UI ngay lập tức
-        setBooks(prev => prev.filter(b => b.book_url !== book_url));
+
+      if (res.success) {
+        setBooks((prev) => prev.filter((b) => b.book_url !== book.book_url));
+      } else {
+        alert(res.error || "Không thể xóa lúc này");
       }
     } catch (error) {
       alert("Không thể xóa lúc này");
     }
   };
 
-  if (!session && !loading) {
+  if (!user && !loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-orange-500 font-mono italic uppercase">
         Vui lòng đăng nhập để xem tủ sách
@@ -56,7 +63,7 @@ export default function LibraryPage() {
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
       <div className="max-w-6xl mx-auto">
-        <Navbar session={session} onHomeClick={() => window.location.href="/"} />
+        <Navbar onHomeClick={() => window.location.href="/"} />
 
         <header className="mt-20 mb-12 flex justify-between items-end border-b border-gray-900 pb-6">
           <div className="border-l-4 border-orange-600 pl-6">
@@ -83,7 +90,7 @@ export default function LibraryPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8">
             {books.map((book) => (
-              <div key={book._id} className="group relative flex flex-col">
+              <div key={book.book_url || book.id} className="group relative flex flex-col">
                 {/* Ảnh bìa & Nút Xóa */}
                 <div className="relative aspect-[3/4.2] overflow-hidden rounded-2xl border border-zinc-900 group-hover:border-orange-500/50 transition-all shadow-2xl bg-zinc-900">
                   <img 
@@ -93,7 +100,7 @@ export default function LibraryPage() {
                   />
                   {/* Nút Xóa nhanh */}
                   <button 
-                    onClick={() => handleRemove(book.book_url)}
+                    onClick={() => handleRemove(book)}
                     className="absolute top-2 right-2 p-2 bg-black/80 text-gray-500 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0"
                   title="Xóa khỏi tủ sách">
                     <Trash2 size={16} />
@@ -108,7 +115,7 @@ export default function LibraryPage() {
                   
                   {/* Nút Đọc nhanh - Cần xử lý slug từ URL gốc */}
                   <Link 
-                    href={`/book/${encodeURIComponent(book.book_url.split('/').filter(Boolean).pop())}`} 
+                    href={`/book/${encodeURIComponent(book.book_url)}`} 
                     className="mt-4 w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-orange-500 text-white hover:text-black py-3 rounded-xl text-[10px] font-black transition-all"
                   >
                     <BookOpen size={12} />

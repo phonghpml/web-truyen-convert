@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ArrowRight, Settings, Loader2, Headphones,
@@ -21,6 +21,7 @@ export default function ChapterPage() {
   const chapterUrl = searchParams.get("url");
 
   const [paragraphs, setParagraphs] = useState<string[]>([]);
+  const [fetchedChapters, setFetchedChapters] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [fontSize, setFontSize] = useState(18);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -77,6 +78,61 @@ export default function ChapterPage() {
   useEffect(() => {
     if (chapterUrl) { fetchContent(chapterUrl); stopAudio(); }
   }, [chapterUrl, fetchContent]);
+
+  // If localStorage doesn't contain chapters for this book, try fetching them from the crawler
+  useEffect(() => {
+    const tryFetchChapters = async () => {
+      if (typeof window === 'undefined') return;
+      try {
+        const raw = localStorage.getItem(`chapters_${slug}`);
+        if (raw) return;
+        if (!slug) return;
+
+        // Fetch book to get source_url
+        const bookRes = await fetch(`${CRAWLER_BASE_URL}/books?slug=${encodeURIComponent(slug)}`);
+        const bookJson = await bookRes.json();
+        if (!bookJson?.success || !bookJson?.data || bookJson.data.length === 0) return;
+        const source = bookJson.data[0].source_url;
+        if (!source) return;
+
+        const chRes = await fetch(`${CRAWLER_BASE_URL}/chapters?book=${encodeURIComponent(source)}`);
+        const chJson = await chRes.json();
+        if (chJson?.success && Array.isArray(chJson.data)) {
+          setFetchedChapters(chJson.data);
+          try { localStorage.setItem(`chapters_${slug}`, JSON.stringify(chJson.data)); } catch {}
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    tryFetchChapters();
+  }, [slug]);
+
+  // Determine the displayed chapter title: prefer saved chapters (localStorage),
+  // fall back to chapter metadata or the slug.
+  const displayedChapterTitle = useMemo(() => {
+    try {
+      if (!slug || !chapterSlug) return chapterSlug.replace(/-/g, ' ');
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(`chapters_${slug}`) : null;
+      if (raw) {
+        const list = JSON.parse(raw || '[]');
+        const found = list.find((c: any) => c.slug === chapterSlug || c.slug === decodeURIComponent(chapterSlug));
+        if (found) return found.title_vi || found.title || (found.title && String(found.title)) || chapterSlug.replace(/-/g, ' ');
+      }
+
+      if (fetchedChapters && Array.isArray(fetchedChapters)) {
+        const found = fetchedChapters.find((c: any) => c.slug === chapterSlug || c.slug === decodeURIComponent(chapterSlug));
+        if (found) return found.title_vi || found.title || chapterSlug.replace(/-/g, ' ');
+      }
+    } catch (e) {
+      // ignore and fallback
+    }
+    try {
+      return decodeURIComponent(chapterSlug).replace(/-/g, ' ');
+    } catch {
+      return chapterSlug.replace(/-/g, ' ');
+    }
+  }, [slug, chapterSlug]);
 
   const fetchAudioBlob = async (index: number) => {
     if (index >= paragraphs.length || index < 0 || blobCache.current[index] || loadingTasks.current.has(index)) return;
@@ -145,7 +201,7 @@ export default function ChapterPage() {
                 Reading Mode
               </span>
               <h2 className="text-sm md:text-lg font-black text-zinc-100 uppercase italic leading-tight mt-0.5 font-mono truncate">
-                {chapterSlug.replace(/-/g, ' ')}
+                {displayedChapterTitle}
               </h2>
             </div>
           </div>

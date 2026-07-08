@@ -1,7 +1,7 @@
 "use client";
-import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { login, saveAuth } from "@/lib/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -13,16 +13,14 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-      if (res?.error) {
-        alert("Sai email hoặc mật khẩu!");
-      } else {
-        window.location.href = "/"; 
+      const res = await login(email, password);
+      if (!res.success || !res.data?.token) {
+        alert(res.error || "Sai email hoặc mật khẩu!");
+        return;
       }
+
+      saveAuth(res.data.token, res.data.user);
+      router.push("/");
     } catch (err) {
       alert("Đã có lỗi xảy ra!");
     } finally {

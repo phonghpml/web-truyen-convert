@@ -18,8 +18,8 @@ export const ChapterList = ({ chapters, onSelectChapter }: ChapterListProps) => 
   const sortedChapters = useMemo(() => {
     const list = [...chapters];
     list.sort((a, b) => {
-      const na = parseChapterNum(a.title_vi || "");
-      const nb = parseChapterNum(b.title_vi || "");
+      const na = parseChapterNum(a.title_vi || a.title || "");
+      const nb = parseChapterNum(b.title_vi || b.title || "");
       return isAscending ? na - nb : nb - na;
     });
     return list;
@@ -41,13 +41,12 @@ export const ChapterList = ({ chapters, onSelectChapter }: ChapterListProps) => 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 h-[600px] overflow-y-auto pr-4 custom-scrollbar">
         {sortedChapters.map((ch, index) => (
           <button 
-            // Dùng slug làm key sẽ ổn định hơn index khi danh sách thay đổi
             key={ch.slug || index} 
             onClick={() => onSelectChapter(ch)}
             className="group flex items-center p-4 bg-gray-950/50 border border-gray-800 rounded-lg hover:border-orange-500/50 hover:bg-gray-900 transition-all text-left"
           >
             <span className="text-[13px] text-gray-300 group-hover:text-white font-sans font-medium antialiased tracking-tight truncate">
-              {ch.title_vi}
+              {ch.title_vi || ch.title || "Chương không xác định"}
             </span>
           </button>
         ))}

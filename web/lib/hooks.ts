@@ -96,6 +96,16 @@ export async function fetchBook(
       return { book: data.data[0], error: null };
     }
 
+    // Try by source_url in case the slug is actually an encoded external URL
+    response = await fetch(
+      `${ENDPOINTS.BOOKS}?source_url=${encodeURIComponent(decodedSlug)}`
+    );
+    data = await response.json();
+
+    if (data.success && data.data && data.data.length > 0) {
+      return { book: data.data[0], error: null };
+    }
+
     return { book: null, error: MESSAGES.NO_BOOK_FOUND };
   } catch (err) {
     console.error("Error fetching book:", err);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { parseChapterNum } from "@/lib/utils";
+import { saveReadingHistory } from "@/lib/auth";
 
 // Thêm bookUrl vào tham số đầu vào của Hook
 export function useReader(chapters: any[], bookUrl?: string) {
@@ -37,15 +38,11 @@ export function useReader(chapters: any[], bookUrl?: string) {
     if (detailChapter && bookUrl) {
       const saveHistory = async () => {
         try {
-          await fetch("/api/user/history", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              book_url: bookUrl,
-              chapter_slug: detailChapter.slug,
-              chapter_url: detailChapter.url,
-              chapter_title: detailChapter.title,
-            }),
+          await saveReadingHistory({
+            book_url: bookUrl,
+            chapter_slug: detailChapter.slug,
+            chapter_url: detailChapter.url,
+            chapter_title: detailChapter.title,
           });
         } catch (err) {
           console.error("Không thể lưu lịch sử đọc dở");

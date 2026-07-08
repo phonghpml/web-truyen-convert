@@ -17,8 +17,6 @@ async def get_browser():
     if _context is None:
         print("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
         try:
-            # Sử dụng hàm bất đồng bộ gốc của CloakBrowser để tạo thẳng context ẩn danh
-            # Mọi cấu hình chống chặn bot (Blink, Webdriver, Fingerprint C++) đã được xử lý ở tầng C++ của binary
             _context = await cloakbrowser.launch_context_async(
                 headless=True,
                 viewport={'width': 1280, 'height': 720},
@@ -30,6 +28,16 @@ async def get_browser():
             print(f"❌ Lỗi cấu hình cloakbrowser: {e}")
             raise e
     return _context
+
+async def close_browser():
+    global _context
+    if _context is not None:
+        try:
+            await _context.close()
+        except Exception as e:
+            print(f"⚠️ Lỗi khi đóng CloakBrowser context: {e}")
+        finally:
+            _context = None
 # async def get_browser():
 #     global _browser, _context
 #     if _browser is None:

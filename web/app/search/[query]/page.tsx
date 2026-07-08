@@ -51,8 +51,9 @@ export default function SearchPage() {
   }, [query]);
 
   const handleBookClick = (book: any) => {
-    if (book.source_url) {
-      router.push(getBookLink(book.source_url));
+    const target = book.slug || book.source_url || book.id;
+    if (target) {
+      router.push(getBookLink(target));
     }
   };
 
@@ -63,7 +64,7 @@ export default function SearchPage() {
   return (
     <main className="min-h-screen bg-black text-white font-mono p-6">
       <div className="max-w-5xl mx-auto">
-        <Navbar session={null} onHomeClick={handleHome} />
+        <Navbar onHomeClick={handleHome} />
 
         <div className="mt-12">
           <h2 className="text-3xl font-black mb-2 italic tracking-tighter">
@@ -83,7 +84,7 @@ export default function SearchPage() {
             <div className="space-y-4">
               {searchResults.map((book) => (
                 <div
-                  key={book.source_url || book._id}
+                  key={book.id || book.source_url || book.slug}
                   className="cursor-pointer"
                   onClick={() => handleBookClick(book)}
                 >

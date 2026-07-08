@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from "next/navigation";
+import { register as registerUser } from '@/lib/auth';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -14,18 +15,12 @@ export default function Register() {
     setLoading(true);
     
     try {
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
+      const res = await registerUser(email, password);
+      if (res.success) {
         alert("Đăng ký thành công!");
         router.push('/login'); 
       } else {
-        alert(data.error || "Có lỗi xảy ra!");
+        alert(res.error || "Có lỗi xảy ra!");
       }
     } catch (err) {
       alert("Lỗi kết nối máy chủ!");

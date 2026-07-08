@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSession } from "next-auth/react";
 import { Navbar } from "@/components/layout/Navbar";
 import CrawlSection from "@/components/features/CrawlSection";
 import BooksDisplay from "@/components/features/BooksDisplay";
 
 export default function Home() {
-  const { data: session } = useSession(); // Lấy session từ NextAuth
   const [isSearching, setIsSearching] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
@@ -20,8 +18,7 @@ export default function Home() {
     <main className="min-h-screen bg-black text-white font-mono p-6">
       <div className="max-w-5xl mx-auto">
 
-        {/* Truyền session thật vào để Navbar hiện Avatar hoặc nút Đăng xuất */}
-        <Navbar session={session} onHomeClick={handleHomeClick} />
+<Navbar onHomeClick={handleHomeClick} />
 
         <div className="text-center mt-20">
           <h2 className="text-6xl font-black mb-2 italic tracking-tighter uppercase">

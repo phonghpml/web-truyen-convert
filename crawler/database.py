@@ -1,62 +1,137 @@
 import os
-from dotenv import load_dotenv
-from pymongo import MongoClient
+import re
+import asyncio
 from datetime import datetime
+from dotenv import load_dotenv
+from prisma import Prisma
 
-load_dotenv() # Nạp biến từ file .env
-# Cấu hình kết nối
-MONGO_URI = os.getenv("MONGODB_URI")
-DB_NAME = os.getenv("MONGODB_DB_NAME")
+load_dotenv()
 
-client = MongoClient(
-    MONGO_URI, 
-    maxPoolSize=50, 
-    retryWrites=True # Tự động thử lại nếu kết nối mạng chập chờn
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise SystemExit("Missing DATABASE_URL in environment")
 
-# Kiểm tra kết nối ngay lập tức
-try:
-    
-    client.admin.command('ping')
-    db = client[DB_NAME]
-except Exception as e:
-    raise SystemExit(f"Không thể kết nối MongoDB: {e}")
+client = Prisma()
 
-# --- KHỞI TẠO INDEX (Chỉ chạy khi bắt đầu kết nối) ---
-# Index cho bảng truyện (books) dựa trên source_url
-db.books.create_index("source_url", unique=True)
+async def connect():
+    try:
+        await client.connect()
+    except Exception as e:
+        raise SystemExit(f"Cannot connect to PostgreSQL via Prisma: {e}")
 
-# Index cho bảng chương (chapters) dựa trên url gốc
-db.chapters.create_index("url", unique=True)
+async def disconnect():
+    await client.disconnect()
 
-# Index kết hợp cho slug để làm đường dẫn web (Search theo slug trong 1 bộ truyện)
-# Chạy dòng này nếu bạn đã có trường 'slug' trong dữ liệu chương
-db.chapters.create_index([("book_source_url", 1), ("slug", 1)], unique=True)
-# ---------------------------------------------------
 
-def save_book(data):
-    """Lưu thông tin tổng quan của truyện"""
-    return db.books.update_one(
-        {"source_url": data['source_url']}, 
-        {"$set": {**data, "updated_at": datetime.now()}}, 
-        upsert=True
+def _get_field(row: dict | object, field: str, default=None):
+    if isinstance(row, dict):
+        return row.get(field, default)
+    return getattr(row, field, default)
+
+
+def _slugify(text: str) -> str:
+    if not text:
+        return ""
+    # lower, replace non-alnum with '-', trim duplicate '-' and edges
+    s = text.lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s
+
+
+def serialize_book_row(row: dict | object, chapters_count: int | None = None) -> dict:
+    payload = {
+        "id": _get_field(row, "id"),
+        "source_url": _get_field(row, "source_url"),
+        "slug": _get_field(row, "slug"),
+        "title_vi": _get_field(row, "title_vi"),
+        "title_en": _get_field(row, "title_en"),
+        "author_vi": _get_field(row, "author_vi"),
+        "description_vi": _get_field(row, "description_vi"),
+        "status": _get_field(row, "status"),
+        "cover_url": _get_field(row, "cover_url"),
+        "views_count": _get_field(row, "views_count", 0),
+        "chapters_count": chapters_count if chapters_count is not None else _get_field(row, "chapters_count", 0),
+        "updated_at": _get_field(row, "updatedAt") or _get_field(row, "updated_at"),
+    }
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def serialize_chapter_row(row: dict | object) -> dict:
+    title = _get_field(row, "title")
+    payload = {
+        "id": _get_field(row, "id"),
+        "book_source_url": _get_field(row, "book_source_url"),
+        "title": title,
+        "title_vi": _get_field(row, "title_vi") or title,
+        "url": _get_field(row, "url"),
+        "slug": (_get_field(row, "slug") or _slugify(title)),
+        "chapter_no": _get_field(row, "chapter_no"),
+        "updated_at": _get_field(row, "updatedAt") or _get_field(row, "updated_at"),
+    }
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def _normalize_book_data(data: dict) -> dict:
+    book_data = {
+        "source_url": data["source_url"],
+        "slug": data.get("slug"),
+        "title_vi": data.get("title_vi"),
+        "title_en": data.get("title_en"),
+        "author_vi": data.get("author_vi"),
+        "description_vi": data.get("description_vi"),
+        "status": data.get("status"),
+        "cover_url": data.get("cover_url"),
+        "views_count": data.get("views_count", 0),
+        "chapters_count": data.get("chapters_count", 0),
+        "updatedAt": datetime.now(),
+    }
+    return {k: v for k, v in book_data.items() if v is not None}
+
+async def save_book(data: dict):
+    book_data = _normalize_book_data(data)
+
+    return await client.book.upsert(
+        where={"source_url": book_data["source_url"]},
+        data={
+            "create": book_data,
+            "update": book_data,
+        },
     )
 
-def save_chapters(book_url, chapters_list):
-    """Lưu danh sách chương bằng Bulk Write để tối ưu tốc độ"""
-    from pymongo import UpdateOne
-    
-    operations = []
+async def save_chapters(book_url: str, chapters_list: list):
+    if not chapters_list:
+        return None
+
+    # Kiểm tra book tồn tại trước khi lưu chapters (FK constraint)
+    book = await client.book.find_unique(where={"source_url": book_url})
+    if not book:
+        raise ValueError(f"Book với source_url '{book_url}' không tồn tại. Vui lòng gọi /get-basic-info trước.")
+
+    tasks = []
     for ch in chapters_list:
-        operations.append(
-            UpdateOne(
-                {"url": ch["url"]}, 
-                {"$set": {**ch, "book_source_url": book_url, "updated_at": datetime.now()}}, 
-                upsert=True
+        chapter_no_value = ch.get("chapter_no")
+        if chapter_no_value is None:
+            chapter_no_value = 0
+
+        chapter_data = {
+            "book_source_url": book_url,
+            "title": ch.get("title_vi") or ch.get("title") or "",
+            "url": ch.get("url"),
+            "slug": ch.get("slug"),
+            "chapter_no": chapter_no_value,
+            "updatedAt": datetime.now(),
+        }
+
+        tasks.append(
+            client.chapter.upsert(
+                where={"url": chapter_data["url"]},
+                data={
+                    "create": chapter_data,
+                    "update": chapter_data,
+                },
             )
         )
-    
-    if operations:
-        return db.chapters.bulk_write(operations)
-    return None
+
+    return await asyncio.gather(*tasks)
 

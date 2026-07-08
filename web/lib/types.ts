@@ -5,6 +5,7 @@ export interface User {
 }
 
 export interface Book {
+  id?: string;
   _id?: string;
   source_url: string;
   slug: string;
@@ -18,6 +19,7 @@ export interface Book {
 }
 
 export interface Chapter {
+  id?: string;
   _id?: string;
   title: string;
   url: string;
@@ -52,16 +54,26 @@ export interface SelectedChapter {
   url: string;
 }
 
-// Thêm vào cuối file web/lib/types.ts
+export interface AuthUser {
+  email: string;
+  name?: string;
+}
+
+export interface AuthResponse extends ApiResponse<{
+  token: string;
+  user: AuthUser;
+}> {}
+
+export interface LibraryStatusResponse extends ApiResponse<{ isSaved: boolean }> {}
 
 export interface ReadingHistory {
   _id?: string;
-  userEmail: string;    // Email người dùng từ NextAuth
-  book_url: string;     // Link gốc của bộ truyện (source_url)
-  chapter_slug: string;  // Slug chương đang đọc dở
-  chapter_title: string; // Tên chương đang đọc dở
+  userEmail: string;
+  book_url: string;
+  chapter_slug: string;
+  chapter_title: string;
+  chapter_url?: string;
   updated_at: string | Date;
 }
 
-// Interface này dùng để hứng dữ liệu trả về từ API
 export interface HistoryApiResponse extends ApiResponse<ReadingHistory> { }

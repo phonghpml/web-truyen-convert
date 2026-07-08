@@ -31,11 +31,8 @@ ENV HOME=/home/user \
 COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# 4. CÀI ĐẶT PLAYWRIGHT (Điểm mấu chốt: Cài vào thư mục của user)
-RUN python3 -m playwright install chromium
-
-# 5. Copy toàn bộ code
+# 4. Copy toàn bộ code (cloakbrowser sẽ tự động download binary khi khởi tạo)
 COPY --chown=user . .
 
-# 6. Chạy ứng dụng trên cổng 7860
+# 5. Chạy ứng dụng trên cổng 7860
 CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]

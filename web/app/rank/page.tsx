@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from "@/components/layout/Navbar";
-import { useSession } from "next-auth/react";
+import { CRAWLER_BASE_URL } from "@/lib/constants";
 import { 
   Flame, 
   Zap, 
@@ -86,7 +86,6 @@ interface BookItem {
 function RankContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
   
   const currentYearStr = new Date().getFullYear().toString();
   const currentMonthStr = (new Date().getMonth() + 1).toString().padStart(2, '0');
@@ -132,7 +131,7 @@ function RankContent() {
     const fetchRankData = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/qidian-rank?type=${currentType}&chn=${currentChn}&page=${currentPage}&year=${currentYear}&month=${currentMonth}`);
+        const res = await fetch(`${CRAWLER_BASE_URL}/get-qidian-rank?type=${currentType}&chn=${currentChn}&page=${currentPage}&year=${currentYear}&month=${currentMonth}`);
         if (!res.ok) throw new Error('Network error');
         
         const jsonResult = await res.json();
@@ -175,7 +174,7 @@ function RankContent() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <Navbar session={session} />
+      <Navbar />
 
       <div className="py-4 md:py-8">
         <div className="mb-4 md:mb-6 pb-4 border-b border-zinc-900 flex items-baseline gap-3">
