@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bookmark, LogOut, User, Home, Loader2, ChevronDown, Settings, Trophy } from "lucide-react";
+import { Bookmark, LogOut, User, Home, Loader2, ChevronDown, Settings, Trophy, Download } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useState, useRef, useEffect } from "react";
 
@@ -57,6 +57,17 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
         >
           <Trophy size={13} className={pathname === "/rank" ? "animate-pulse" : ""} />
           <span className="hidden sm:inline">Xếp Hạng</span>
+        </Link>
+        <Link
+          href="/crawl"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all ${
+            pathname === "/crawl"
+              ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-900"
+          }`}
+        >
+          <Download size={13} className={pathname === "/crawl" ? "animate-pulse" : ""} />
+          <span className="hidden sm:inline">Cào Truyện</span>
         </Link>
       </div>
 

@@ -136,19 +136,30 @@ async def scrape_stv_basic_info(url: str):
     context = await get_browser()
     page = await context.new_page()
     try:
-        # STV cần thời gian để render bản dịch JS
-        await page.goto(url, wait_until="commit", timeout=60000)
-        await page.wait_for_selector("#book_name2", timeout=20000)
-        await asyncio.sleep(2) 
+        # STV metadata có thể có sẵn trong meta tags nên chỉ cần DOMContentLoaded là đủ.
+        await page.goto(url, wait_until="domcontentloaded", timeout=120000)
+        await asyncio.sleep(2)
 
-        return await page.evaluate('''() => {
-            return { 
-                title_vi: document.querySelector('#book_name2')?.innerText?.trim() || "", 
-                author_vi: document.querySelector('h2')?.innerText?.trim() || "", 
-                description_vi: document.querySelector('.textzoom')?.innerText?.trim() || "", 
-                cover_url: document.querySelector('#thumb-prop')?.src || "" 
-            };
+        data = await page.evaluate('''() => {
+            const getMeta = (selector) => document.querySelector(selector)?.content?.trim() || "";
+            const title = getMeta('meta[property="og:novel:book_name"]') || getMeta('meta[property="og:title"]') || document.title || "";
+            const author = getMeta('meta[property="og:novel:author"]') || "";
+            const description = getMeta('meta[property="og:description"]') || getMeta('meta[name="description"]') || "";
+            const cover = getMeta('meta[property="og:image"]') || getMeta('meta[itemprop="image"]') || "";
+            return { title_vi: title, author_vi: author, description_vi: description, cover_url: cover };
         }''')
+
+        if data and not data.get("title_vi"):
+            return await page.evaluate('''() => {
+                return {
+                    title_vi: document.querySelector('#book_name2')?.innerText?.trim() || "",
+                    author_vi: document.querySelector('h2')?.innerText?.trim() || "",
+                    description_vi: document.querySelector('.textzoom')?.innerText?.trim() || "",
+                    cover_url: document.querySelector('#thumb-prop')?.src || ""
+                };
+            }''')
+
+        return data
     except Exception as e:
         print(f"❌ Lỗi STV Info: {e}")
         return None

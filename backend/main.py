@@ -14,6 +14,7 @@ from slugify import slugify
 import random
 from routes.auth import router as auth_router
 from routes.user import router as user_router
+from routes.crawl import router as crawl_router, restore_jobs_from_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
     # Đảm bảo nạp từ điển vào RAM từ đây
     tr.translator.load_all_dicts()
     await db_mod.connect()
+    await restore_jobs_from_db()
     yield
     try:
         await scr.close_browser()
@@ -45,6 +47,7 @@ async def root():
 
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(crawl_router)
 
 class TranslationRequest(BaseModel):
     url: str

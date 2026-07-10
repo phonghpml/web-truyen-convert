@@ -161,3 +161,103 @@ async def save_chapters(book_url: str, chapters_list: list):
 
     return await asyncio.gather(*tasks)
 
+
+def serialize_crawl_job_row(row: dict) -> dict:
+    if not row:
+        return {}
+
+    return {
+        "job_id": _get_field(row, "job_id"),
+        "book_url": _get_field(row, "book_url"),
+        "status": _get_field(row, "status"),
+        "title_vi": _get_field(row, "title_vi"),
+        "author_vi": _get_field(row, "author_vi"),
+        "description_vi": _get_field(row, "description_vi"),
+        "cover_url": _get_field(row, "cover_url"),
+        "total_chapters": _get_field(row, "total_chapters", 0),
+        "crawled_chapters": _get_field(row, "crawled_chapters", 0),
+        "current_chapter_index": _get_field(row, "current_chapter_index", 0),
+        "current_chapter_title": _get_field(row, "current_chapter_title"),
+        "current_chapter_url": _get_field(row, "current_chapter_url"),
+        "created_at": _get_field(row, "createdAt") or _get_field(row, "created_at"),
+        "updated_at": _get_field(row, "updatedAt") or _get_field(row, "updated_at"),
+    }
+
+
+async def save_crawl_job(data: dict):
+    if not data:
+        return None
+
+    if hasattr(client, "crawljob"):
+        return await client.crawljob.upsert(
+            where={"job_id": data["job_id"]},
+            data={
+                "create": data,
+                "update": data,
+            },
+        )
+
+    columns = ", ".join(f'"{key}"' for key in data.keys())
+    placeholders = ", ".join(f"${idx + 1}" for idx in range(len(data)))
+    update_assignments = ", ".join(
+        f'"{key}" = EXCLUDED."{key}"' for key in data.keys() if key != "job_id"
+    )
+    query = (
+        f"INSERT INTO \"CrawlJob\" ({columns}) VALUES ({placeholders}) "
+        f"ON CONFLICT (\"job_id\") DO UPDATE SET {update_assignments} RETURNING *"
+    )
+    result = await client.query_raw(query, *data.values())
+    return result[0] if result else None
+
+
+async def update_crawl_job(job_id: str, data: dict):
+    if not job_id or not data:
+        return None
+
+    if hasattr(client, "crawljob"):
+        return await client.crawljob.update(
+            where={"job_id": job_id},
+            data=data,
+        )
+
+    assignments = ", ".join(f'"{key}" = ${idx + 1}' for idx, key in enumerate(data.keys()))
+    query = (
+        f"UPDATE \"CrawlJob\" SET {assignments} WHERE \"job_id\" = ${len(data) + 1} RETURNING *"
+    )
+    values = [*data.values(), job_id]
+    result = await client.query_raw(query, *values)
+    return result[0] if result else None
+
+
+async def delete_crawl_job(job_id: str):
+    if not job_id:
+        return None
+
+    if hasattr(client, "crawljob"):
+        return await client.crawljob.delete(where={"job_id": job_id})
+
+    return await client.execute_raw(
+        'DELETE FROM "CrawlJob" WHERE "job_id" = $1',
+        job_id,
+    )
+
+
+async def get_crawl_jobs():
+    if hasattr(client, "crawljob"):
+        return await client.crawljob.find_many(order={"updatedAt": "desc"})
+
+    return await client.query_raw('SELECT * FROM "CrawlJob" ORDER BY "updatedAt" DESC')
+
+
+async def get_crawl_job_by_job_id(job_id: str):
+    if not job_id:
+        return None
+
+    if hasattr(client, "crawljob"):
+        return await client.crawljob.find_unique(where={"job_id": job_id})
+
+    return await client.query_first(
+        'SELECT * FROM "CrawlJob" WHERE "job_id" = $1 LIMIT 1',
+        job_id,
+    )
+
