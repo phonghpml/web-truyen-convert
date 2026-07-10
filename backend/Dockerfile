@@ -34,5 +34,8 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # 4. Copy toàn bộ code (cloakbrowser sẽ tự động download binary khi khởi tạo)
 COPY --chown=user . .
 
-# 5. Chạy ứng dụng trên cổng 7860
+# 5. Sinh Prisma Client Python trước khi chạy ứng dụng
+RUN python3 -m prisma py generate
+
+# 6. Chạy ứng dụng trên cổng 7860
 CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
