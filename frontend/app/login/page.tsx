@@ -61,7 +61,7 @@ export default function Login() {
           <div className="text-center space-y-2">
             {/* THAY ĐỔI 2: Chỉ dùng font-mono cho Tiêu đề để tạo chất "Convert/Hacker" nhưng không gây lỗi dấu */}
             <h1 className="text-3xl font-black text-orange-500 uppercase tracking-tighter italic">
-              Đăng Nhập TestBuild
+              Đăng Nhập
             </h1>
             <p className="text-[11px] text-zinc-500 uppercase tracking-widest font-medium">
               Hệ thống đọc truyện Convert
