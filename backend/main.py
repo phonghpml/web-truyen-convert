@@ -39,6 +39,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {"success": True, "message": "FastAPI backend is running."}
+
 app.include_router(auth_router)
 app.include_router(user_router)
 
