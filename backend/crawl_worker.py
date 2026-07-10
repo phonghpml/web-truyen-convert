@@ -1,6 +1,6 @@
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from slugify import slugify
@@ -51,7 +51,7 @@ async def crawl_job_worker(job: 'CrawlJobData', manager: CrawlQueueManager) -> N
             return
 
         job.status = CrawlJobStatus.running
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
         await _persist_crawl_job(job)
 
         raw_info = None
@@ -101,7 +101,7 @@ async def crawl_job_worker(job: 'CrawlJobData', manager: CrawlQueueManager) -> N
         for index, chapter in enumerate(job.chapters, start=1):
             if manager.is_paused(job.job_id):
                 job.status = CrawlJobStatus.paused
-                job.updated_at = datetime.utcnow()
+                job.updated_at = datetime.now(timezone.utc)
                 return
 
             manager.update_current_chapter(job.job_id, chapter)

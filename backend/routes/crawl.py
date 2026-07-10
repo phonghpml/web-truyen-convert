@@ -1,6 +1,30 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
+
+def _parse_datetime(value: Optional[str]) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except ValueError:
+            return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc)
+
+
+def _get_field(row: dict, field: str, default=None):
+    if isinstance(row, dict):
+        return row.get(field, default)
+    return getattr(row, field, default)
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
@@ -44,6 +68,14 @@ def _normalize_source_url(url: str) -> str:
 
 
 def _job_to_payload(job: CrawlJobData) -> Dict:
+    crawled_chapters = job.crawled_chapters
+    if job.status == CrawlJobStatus.completed and job.total_chapters > 0:
+        crawled_chapters = job.total_chapters
+
+    remaining_chapters = queue_manager.get_remaining_chapters(job.job_id)
+    if job.status == CrawlJobStatus.completed:
+        remaining_chapters = 0
+
     return {
         "job_id": job.job_id,
         "book_url": job.book_url,
@@ -53,11 +85,11 @@ def _job_to_payload(job: CrawlJobData) -> Dict:
         "cover_url": job.cover_url,
         "status": job.status.value,
         "total_chapters": job.total_chapters,
-        "crawled_chapters": job.crawled_chapters,
+        "crawled_chapters": crawled_chapters,
         "current_chapter_index": job.current_chapter_index,
         "current_chapter_title": job.current_chapter_title,
         "current_chapter_url": job.current_chapter_url,
-        "remaining_chapters": queue_manager.get_remaining_chapters(job.job_id),
+        "remaining_chapters": remaining_chapters,
         "created_at": job.created_at.isoformat(),
         "updated_at": job.updated_at.isoformat(),
         "chapters": [
@@ -112,12 +144,12 @@ def _row_to_job(row: dict) -> CrawlJobData:
     except ValueError:
         status = CrawlJobStatus.queued
 
-    created_at = getattr(row, "createdAt", None) or getattr(row, "created_at", None)
-    updated_at = getattr(row, "updatedAt", None) or getattr(row, "updated_at", None)
+    created_at = _parse_datetime(getattr(row, "createdAt", None) or getattr(row, "created_at", None))
+    updated_at = _parse_datetime(getattr(row, "updatedAt", None) or getattr(row, "updated_at", None))
 
     return CrawlJobData(
-        job_id=getattr(row, "job_id", ""),
-        book_url=getattr(row, "book_url", ""),
+        job_id=_get_field(row, "job_id", ""),
+        book_url=_get_field(row, "book_url", ""),
         created_at=created_at,
         updated_at=updated_at,
         status=status,

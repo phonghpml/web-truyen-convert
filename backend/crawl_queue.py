@@ -1,9 +1,21 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Deque, Dict, List, Optional
 from collections import deque
 import uuid
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _ensure_utc(dt: Optional[datetime]) -> datetime:
+    if dt is None:
+        return _utcnow()
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 class CrawlJobStatus(str, Enum):
@@ -72,7 +84,7 @@ class CrawlQueueManager:
             return existing
 
         job_id = self._generate_job_id()
-        now = datetime.utcnow()
+        now = _utcnow()
         job = CrawlJobData(
             job_id=job_id,
             book_url=cleaned_url,
@@ -102,6 +114,8 @@ class CrawlQueueManager:
         if not job or not job.job_id:
             return
 
+        job.created_at = _ensure_utc(job.created_at)
+        job.updated_at = _ensure_utc(job.updated_at)
         self._jobs[job.job_id] = job
         if job.status == CrawlJobStatus.queued:
             if job.job_id not in self._queue:
@@ -117,7 +131,7 @@ class CrawlQueueManager:
         job = self.get_job(job_id)
         if job and job.status in {CrawlJobStatus.queued, CrawlJobStatus.running}:
             job.status = CrawlJobStatus.paused
-            job.updated_at = datetime.utcnow()
+            job.updated_at = _utcnow()
             if job_id in self._queue:
                 self._queue.remove(job_id)
         return job
@@ -128,7 +142,7 @@ class CrawlQueueManager:
             return None
         if job.status in {CrawlJobStatus.paused, CrawlJobStatus.failed}:
             job.status = CrawlJobStatus.queued
-            job.updated_at = datetime.utcnow()
+            job.updated_at = _utcnow()
             if job_id in self._queue:
                 self._queue.remove(job_id)
             self._queue.appendleft(job_id)
@@ -138,14 +152,17 @@ class CrawlQueueManager:
         job = self.get_job(job_id)
         if job:
             job.status = CrawlJobStatus.completed
-            job.updated_at = datetime.utcnow()
+            if job.total_chapters > 0:
+                job.crawled_chapters = job.total_chapters
+                job.current_chapter_index = job.total_chapters
+            job.updated_at = _utcnow()
         return job
 
     def fail_job(self, job_id: str) -> Optional[CrawlJobData]:
         job = self.get_job(job_id)
         if job:
             job.status = CrawlJobStatus.failed
-            job.updated_at = datetime.utcnow()
+            job.updated_at = _utcnow()
         return job
 
     def remove_job(self, job_id: str) -> None:
@@ -162,7 +179,7 @@ class CrawlQueueManager:
                 continue
             if job.status == CrawlJobStatus.queued:
                 job.status = CrawlJobStatus.running
-                job.updated_at = datetime.utcnow()
+                job.updated_at = _utcnow()
                 return job
             if job.status == CrawlJobStatus.paused:
                 continue
@@ -177,7 +194,7 @@ class CrawlQueueManager:
             job.current_chapter_index = 0
             job.current_chapter_title = None
             job.current_chapter_url = None
-            job.updated_at = datetime.utcnow()
+            job.updated_at = _utcnow()
 
     def update_current_chapter(self, job_id: str, chapter: CrawlChapterItem) -> Optional[CrawlJobData]:
         job = self.get_job(job_id)
@@ -185,7 +202,7 @@ class CrawlQueueManager:
             job.current_chapter_index = chapter.chapter_no
             job.current_chapter_title = chapter.title_vi
             job.current_chapter_url = chapter.url
-            job.updated_at = datetime.utcnow()
+            job.updated_at = _utcnow()
         return job
 
     def get_remaining_chapters(self, job_id: str) -> int:
@@ -206,7 +223,7 @@ class CrawlQueueManager:
         if job:
             job.crawled_chapters = crawled_chapters
             job.current_chapter_index = current_chapter_index
-            job.updated_at = datetime.utcnow()
+            job.updated_at = _utcnow()
         return job
 
     def record_chapter_status(self, job_id: str, chapter_no: int, status: CrawlChapterStatus) -> None:
