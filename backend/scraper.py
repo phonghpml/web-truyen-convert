@@ -265,8 +265,6 @@ async def scrape_stv_chapter_content(url: str):
         print(f"Step 1: Điều hướng tới {url}")
         await page.goto(url, wait_until="commit", timeout=60000)
         
-        # DEBUG: Chụp ảnh sau khi trang vừa load
-        await page.screenshot(path=f"debug_logs/debug_{target_chap_id}_1_goto.png")
         
         # Bước 2: Đợi nạp script và kích hoạt API
         await asyncio.sleep(1.5)
