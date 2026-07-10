@@ -23,10 +23,13 @@ async def disconnect():
     await client.disconnect()
 
 
-def _get_field(row: dict | object, field: str, default=None):
+def _get_field(row: dict, field: str, default=None):
     if isinstance(row, dict):
         return row.get(field, default)
     return getattr(row, field, default)
+
+
+from typing import Any
 
 
 def _slugify(text: str) -> str:
@@ -39,7 +42,7 @@ def _slugify(text: str) -> str:
     return s
 
 
-def serialize_book_row(row: dict | object, chapters_count: int | None = None) -> dict:
+def serialize_book_row(row: dict, chapters_count: int = None) -> dict:
     payload = {
         "id": _get_field(row, "id"),
         "source_url": _get_field(row, "source_url"),
@@ -57,7 +60,7 @@ def serialize_book_row(row: dict | object, chapters_count: int | None = None) ->
     return {k: v for k, v in payload.items() if v is not None}
 
 
-def serialize_chapter_row(row: dict | object) -> dict:
+def serialize_chapter_row(row: dict) -> dict:
     title = _get_field(row, "title")
     payload = {
         "id": _get_field(row, "id"),
@@ -72,7 +75,7 @@ def serialize_chapter_row(row: dict | object) -> dict:
     return {k: v for k, v in payload.items() if v is not None}
 
 
-async def get_chapter_content_by_url(url: str) -> str | None:
+async def get_chapter_content_by_url(url: str) -> str:
     if not url:
         return None
 
