@@ -45,6 +45,9 @@ class SerializationTests(unittest.TestCase):
         self.assertEqual(payload['chapter_no'], 1)
         self.assertEqual(payload['book_source_url'], 'https://example.com/book')
         self.assertEqual(payload['updated_at'], '2024-01-01T00:00:00')
+        # default when missing in row
+        self.assertIn('is_story_content', payload)
+        self.assertEqual(payload['is_story_content'], False)
 
 
 if __name__ == '__main__':

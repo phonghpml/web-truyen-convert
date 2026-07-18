@@ -10,4 +10,5 @@ bcrypt
 gunicorn
 edge-tts
 python-slugify
-cloakbrowser
+cloakbrowser==0.4.11
+python-multipart

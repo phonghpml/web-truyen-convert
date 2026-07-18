@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Book, Chapter, ApiResponse } from "./types";
+import { Book, Chapter, Video, ApiResponse } from "./types";
 import { ENDPOINTS, MESSAGES } from "./constants";
 
 interface UseFetchState<T> {
@@ -133,6 +133,52 @@ export async function fetchChapters(
   } catch (err) {
     console.error("Error fetching chapters:", err);
     return { chapters: [], error: MESSAGES.ERROR };
+  }
+}
+
+export async function fetchBookVideos(
+  sourceUrl: string
+): Promise<{ videos: Video[]; error: string | null }> {
+  try {
+    const response = await fetch(
+      `${ENDPOINTS.CRAWL_VIDEOS}?book_url=${encodeURIComponent(sourceUrl)}`
+    );
+    const data: ApiResponse<Video[]> = await response.json();
+
+    if (data.success && data.data) {
+      return { videos: data.data, error: null };
+    }
+
+    return { videos: [], error: null };
+  } catch (err) {
+    console.error("Error fetching book videos:", err);
+    return { videos: [], error: MESSAGES.ERROR };
+  }
+}
+
+export async function deleteVideo(videoId: string) {
+  try {
+    const response = await fetch(`${ENDPOINTS.CRAWL_VIDEOS}/${encodeURIComponent(videoId)}`, {
+      method: "DELETE",
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Error deleting video:", err);
+    return { success: false, error: MESSAGES.ERROR };
+  }
+}
+
+export async function publishVideoToYouTube(videoId: string) {
+  try {
+    const url = new URL(`${ENDPOINTS.CRAWL_VIDEOS}/${encodeURIComponent(videoId)}/publish-youtube`);
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Error publishing video to YouTube:", err);
+    return { success: false, error: MESSAGES.ERROR };
   }
 }
 

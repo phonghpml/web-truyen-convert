@@ -6,3 +6,7 @@ venv/
 __pycache__/
 .DS_Store
 debug_logs/
+backend/static/
+backend/static/videos/
+backend/static/videos/inputs/
+backend/static/videos/audio/

@@ -28,6 +28,7 @@ export interface Chapter {
   chapter_no: number;
   updated_at?: string;
   book_source_url?: string;
+  access?: "regular" | "vip" | "unvip";
 }
 
 export interface ChapterDetail extends Chapter {
@@ -48,6 +49,25 @@ export interface BooksApiResponse extends ApiResponse<Book[]> {
 }
 
 export interface ChaptersApiResponse extends ApiResponse<Chapter[]> { }
+
+export interface Video {
+  id?: string;
+  book_url: string;
+  video_url: string;
+  chapter_start: number;
+  chapter_count: number;
+  voice: string;
+  rate: string;
+  job_id: string;
+  thumbnail_url?: string;
+  book_title?: string;
+  author_name?: string;
+  video_title?: string;
+  video_description?: string;
+  video_tags?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface SelectedChapter {
   title: string;

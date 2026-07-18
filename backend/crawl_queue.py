@@ -37,6 +37,7 @@ class CrawlChapterItem:
     chapter_no: int
     title_vi: str
     url: str
+    access: str = "regular"
     status: CrawlChapterStatus = CrawlChapterStatus.pending
 
 

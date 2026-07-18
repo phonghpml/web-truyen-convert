@@ -10,6 +10,7 @@ export const ENDPOINTS = {
   CRAWLER_CHAPTERS: `${CRAWLER_BASE_URL}/get-chapters`,
   CRAWL_SUBMIT: `${CRAWLER_BASE_URL}/crawl/submit`,
   CRAWL_JOBS: `${CRAWLER_BASE_URL}/crawl/jobs`,
+  CRAWL_VIDEOS: `${CRAWLER_BASE_URL}/crawl/videos`,
   AUTH_REGISTER: `${CRAWLER_BASE_URL}/auth/register`,
   AUTH_LOGIN: `${CRAWLER_BASE_URL}/auth/login`,
   AUTH_ME: `${CRAWLER_BASE_URL}/auth/me`,

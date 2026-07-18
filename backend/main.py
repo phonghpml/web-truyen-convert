@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,15 +11,21 @@ import edge_tts
 import re
 from datetime import datetime
 from contextlib import asynccontextmanager
-from slugify import slugify
-import random
+from utils import format_chapter_url, generate_slug
+try:
+    import backend.logging_config as _lc
+except Exception:
+    pass
+import logging
+logger = logging.getLogger(__name__)
+from pathlib import Path
 from routes.auth import router as auth_router
 from routes.user import router as user_router
 from routes.crawl import router as crawl_router, restore_jobs_from_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Hệ thống Convert đã sẵn sàng với 1.4 triệu cụm từ!")
+    logger.info("🚀 Hệ thống Convert đã sẵn sàng với 1.4 triệu cụm từ!")
     # Đảm bảo nạp từ điển vào RAM từ đây
     tr.translator.load_all_dicts()
     await db_mod.connect()
@@ -27,11 +34,15 @@ async def lifespan(app: FastAPI):
     try:
         await scr.close_browser()
     except Exception as e:
-        print(f"⚠️ Lỗi khi đóng browser context: {e}")
+        logger.exception(f"⚠️ Lỗi khi đóng browser context: {e}")
     await db_mod.disconnect()
-    print("💤 Hệ thống đang đóng...")
+    logger.info("💤 Hệ thống đang đóng...")
 
 app = FastAPI(lifespan=lifespan)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,19 +63,6 @@ app.include_router(crawl_router)
 class TranslationRequest(BaseModel):
     url: str
 
-def format_chapter_url(url: str) -> str:
-    url = url.strip()
-    if url.endswith(".htm"):
-        return url.rsplit('.', 1)[0] + "/"
-    if not url.endswith("/"):
-        return url + "/"
-    return url
-
-
-def generate_unique_slug(title: str) -> str:
-    base_slug = slugify(title)
-    suffix = str(random.randint(1000, 9999))  # 4 số ngẫu nhiên
-    return f"{base_slug}-{suffix}"
 
 
 @app.get("/books")
@@ -118,9 +116,35 @@ async def api_list_books(
         )
 
         payload = []
+        # Collect source urls and fetch chapter counts in one aggregated query to avoid N+1
+        source_urls = []
         for book in books:
             source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
-            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
+            if source_url_value:
+                source_urls.append(source_url_value)
+
+        counts_map = {}
+        if source_urls:
+            placeholders = ", ".join(f"${{i+1}}" for i in range(len(source_urls)))
+            query = f'SELECT "book_source_url", COUNT(*) as cnt FROM "Chapter" WHERE "book_source_url" IN ({placeholders}) GROUP BY "book_source_url"'
+            try:
+                rows = await db_mod.client.query_raw(query, *source_urls)
+            except Exception:
+                rows = []
+
+            for r in rows:
+                if isinstance(r, dict):
+                    key = r.get("book_source_url")
+                    cnt = int(r.get("cnt", 0))
+                else:
+                    # fallback for tuple-like results
+                    key = r[0]
+                    cnt = int(r[1])
+                counts_map[key] = cnt
+
+        for book in books:
+            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
+            chapters_count = counts_map.get(source_url_value, 0)
             payload.append(db_mod.serialize_book_row(book, chapters_count))
 
         total = await db_mod.client.book.count(where=where_clause)
@@ -156,20 +180,27 @@ async def api_list_chapters(book: Optional[str] = None):
 def build_paragraphs_from_raw_content(raw_content: str) -> list[str]:
     raw_lines = [p.strip() for p in raw_content.split('\n') if p.strip()]
     translated_paragraphs = []
-
     for line in raw_lines:
         translated = tr.translate_text(line)
         if not re.match(r'^\d{4}-\d{2}-\d{2}', translated):
             translated_paragraphs.append(translated)
-
     return translated_paragraphs
+
+
+def remove_saved_notice(raw_content: str) -> str:
+    if not raw_content:
+        return raw_content
+
+    cleaned = re.sub(r'@?Bạn đang đọc bản lưu trong hệ thống', '', raw_content)
+    cleaned = re.sub(r'\n{2,}', '\n', cleaned)
+    return cleaned.strip()
 
 
 async def resolve_chapter_content(url: str) -> tuple[list[str], str]:
     cached_content = await db_mod.get_chapter_content_by_url(url)
     if cached_content:
-        paragraphs = [p.strip() for p in cached_content.splitlines() if p.strip()]
-        return paragraphs, "db"
+        cleaned = remove_saved_notice(cached_content)
+        return cleaned.splitlines(), "db"
 
     if "sangtacviet" in url:
         raw_content = await scr.scrape_stv_chapter_content(url)
@@ -179,8 +210,22 @@ async def resolve_chapter_content(url: str) -> tuple[list[str], str]:
     if not raw_content:
         raise HTTPException(status_code=400, detail="Không lấy được nội dung.")
 
-    paragraphs = build_paragraphs_from_raw_content(raw_content)
-    await db_mod.save_chapter_content(url, paragraphs)
+    raw_content = remove_saved_notice(raw_content)
+    if "sangtacviet" in url:
+        paragraphs = [p.strip() for p in raw_content.splitlines() if p.strip()]
+    else:
+        paragraphs = build_paragraphs_from_raw_content(raw_content)
+
+    # Get chapter title from database for prepending
+    chapter_title = None
+    try:
+        chapter = await db_mod.get_chapter_by_url(url)
+        if chapter:
+            chapter_title = getattr(chapter, "title_vi", None) if not isinstance(chapter, dict) else chapter.get("title_vi")
+    except Exception:
+        pass
+
+    await db_mod.save_chapter_content(url, paragraphs, chapter_title=chapter_title)
     return paragraphs, "crawler"
 
 
@@ -219,13 +264,13 @@ async def api_stream_audio(
                     yield chunk["data"]
         return StreamingResponse(audio_generator(), media_type="audio/mpeg")
     except Exception as e:
-        print(f"❌ Lỗi TTS: {e}")
+        logger.exception(f"❌ Lỗi TTS: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- Cập nhật endpoint /get-basic-info ---
 @app.post("/get-basic-info")
 async def api_get_info(request: TranslationRequest):
-    print(f"🔍 Đang lấy thông tin: {request.url}")
+    logger.info(f"🔍 Đang lấy thông tin: {request.url}")
     
     if "sangtacviet.com" in request.url.lower():
         # Dùng logic mới cho STV (Không cần dịch qua tr.translate_text)
@@ -240,7 +285,7 @@ async def api_get_info(request: TranslationRequest):
             "cover_url": raw.get('cover_url', ''),
             "status": "info_only",
             "updated_at": datetime.now().isoformat(),
-            "slug": generate_unique_slug(raw.get('title_vi'))
+            "slug": generate_slug(raw.get('title_vi'))
         }
     else:
         # GIỮ NGUYÊN LOGIC CŨ CỦA PHONG CHO SHUBA
@@ -255,7 +300,7 @@ async def api_get_info(request: TranslationRequest):
             "cover_url": raw.get('cover_url', ''),
             "status": "info_only",
             "updated_at": datetime.now().isoformat(),
-            "slug": generate_unique_slug(title_translated)
+            "slug": generate_slug(title_translated)
         }
     
     await db_mod.save_book(book_data)
@@ -279,16 +324,17 @@ async def api_get_chapters(request: TranslationRequest):
         translated_chapters = []
         for index, ch in enumerate(raw_chapters):
             # Nếu là STV thì lấy title_vi trực tiếp, nếu không thì dịch title_cn
-            title_final = ch.get('title_vi') if is_stv else tr.translate_text(ch.get('title_cn', ''))
-            
+            const_title = ch.get('title_vi') if is_stv else tr.translate_text(ch.get('title_cn', ''))
+            title_final = const_title or ch.get('title_vi') or ch.get('title') or f"Chương {index + 1}"
             translated_chapters.append({
                 "chapter_no": index + 1,
                 "title_vi": title_final,
                 "url": ch.get('url', ''),
-                "slug": generate_unique_slug(title_final)
+                "slug": generate_slug(title_final),
+                "access": ch.get('access') if is_stv else "regular",
             })
-        
-        await db_mod.save_chapters(request.url, translated_chapters)
+
+        await db_mod.save_chapters(request.url, translated_chapters, replace_existing=True)
         return {"success": True, "total": len(translated_chapters), "chapters": translated_chapters}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -345,7 +391,7 @@ async def api_get_qidian_rank(
                 "intro": desc_vi if desc_vi else "Chưa có tóm tắt cốt truyện...",
                 "coverUrl": getattr(book, 'cover_url', None) if not isinstance(book, dict) else book['cover_url'],
                 "sourceUrl": getattr(book, 'source_url', None) if not isinstance(book, dict) else book['source_url'],
-                "slug": generate_unique_slug(title_vi if title_vi else (getattr(book, 'title_cn', None) if not isinstance(book, dict) else book['title_cn']))
+                "slug": generate_slug(title_vi if title_vi else (getattr(book, 'title_cn', None) if not isinstance(book, dict) else book['title_cn']))
             })
 
         # 4. Bọc đúng 2 lớp .data.data để tương thích hoàn toàn với logic check bên Next.js
@@ -357,5 +403,5 @@ async def api_get_qidian_rank(
         }
 
     except Exception as e:
-        print(f"🔥 Lỗi nghiêm trọng tại API BXH Qidian: {e}")
+        logger.exception(f"🔥 Lỗi nghiêm trọng tại API BXH Qidian: {e}")
         raise HTTPException(status_code=500, detail=str(e))

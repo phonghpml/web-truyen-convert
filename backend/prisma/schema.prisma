@@ -81,10 +81,13 @@ model Chapter {
   id              String   @id @default(cuid())
   book_source_url String
   title           String
+  title_vi        String?
   url             String   @unique
   slug            String
   chapter_no      Int
+  access          String?  // regular | vip | unvip
   content         String?  @db.Text
+  is_story_content Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -112,6 +115,27 @@ model CrawlJob {
   updatedAt             DateTime @updatedAt
   Book                  Book?    @relation(fields: [bookId], references: [id])
   bookId                String?
+
+  @@index([book_url])
+}
+
+model Video {
+  id                String   @id @default(cuid())
+  book_url          String
+  video_url         String
+  chapter_start     Int
+  chapter_count     Int
+  voice             String
+  rate              String
+  job_id            String
+  thumbnail_url     String?
+  book_title        String?
+  author_name       String?
+  video_title       String?
+  video_description String?
+  video_tags        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([book_url])
 }

@@ -5,11 +5,11 @@ import { BookCard } from "@/components/ui/BookCard";
 import { ChapterList } from "@/components/ui/ChapterList";
 // BỎ: import ReaderModal from "@/components/ui/ReaderModal"; 
 import { MESSAGES } from "@/lib/constants";
-import { fetchBook, fetchChapters } from "@/lib/hooks";
+import { fetchBook, fetchChapters, fetchBookVideos } from "@/lib/hooks";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
-import { ApiResponse, Book, Chapter, LibraryStatusResponse, ReadingHistory } from "@/lib/types";
+import { ApiResponse, Book, Chapter, LibraryStatusResponse, ReadingHistory, Video } from "@/lib/types";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { getReadingHistory, getLibraryStatus, toggleLibrary } from "@/lib/auth";
 
@@ -22,18 +22,20 @@ export default function BookDetailsPage() {
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false); 
+  const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedHistory, setSavedHistory] = useState<any>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [activeTab, setActiveTab] = useState<"chapters" | "videos">("chapters");
 
   // THAY THẾ: Logic handleSelect mới để chuyển hướng thay vì mở Modal
   const handleSelect = useCallback((chapter: Chapter) => {
     if (!chapter.url) return;
-    
+
     // 1. Lưu danh sách chương vào localStorage để trang [chapter_slug] dùng tính Next/Prev
     localStorage.setItem(`chapters_${slug}`, JSON.stringify(chapters));
-    
+
     // 2. Chuyển hướng kèm theo URL gốc ở query để Backend cào dữ liệu
     const encodedUrl = encodeURIComponent(chapter.url);
     router.push(`/book/${slug}/${chapter.slug}?url=${encodedUrl}`);
@@ -67,15 +69,24 @@ export default function BookDetailsPage() {
           ? getLibraryStatus(bookData.source_url)
           : Promise.resolve({ success: false, isSaved: false } as LibraryStatusResponse);
 
-      const [chaptersRes, historyRes, libraryRes] = await Promise.all([
+      const videoPromise:
+        | Promise<{ videos: Video[]; error: string | null }>
+        | Promise<{ videos: Video[]; error: string | null }> =
+        bookData.source_url
+          ? fetchBookVideos(bookData.source_url)
+          : Promise.resolve({ videos: [], error: null });
+
+      const [chaptersRes, historyRes, libraryRes, videosRes] = await Promise.all([
         chapterPromise,
         historyPromise,
         libraryPromise,
+        videoPromise,
       ]);
 
       if (chaptersRes.chapters) setChapters(chaptersRes.chapters);
       if (historyRes?.success) setSavedHistory(historyRes.data);
       if (libraryRes?.success) setIsSaved(!!libraryRes.data?.isSaved);
+      if (videosRes?.videos) setVideos(videosRes.videos);
 
     } catch (err) {
       setError(MESSAGES.ERROR_BOOK_DETAILS);
@@ -179,9 +190,8 @@ export default function BookDetailsPage() {
                     <button
                       onClick={handleSyncChapters}
                       disabled={isUpdating}
-                      className={`text-[9px] md:text-[10px] border px-2 py-1 uppercase tracking-tighter transition-all ${
-                        isUpdating ? "opacity-50 border-gray-500 text-gray-500" : "border-orange-500/50 text-orange-500/50 hover:opacity-100 hover:border-orange-500 hover:text-orange-500 bg-black/50"
-                      }`}
+                      className={`text-[9px] md:text-[10px] border px-2 py-1 uppercase tracking-tighter transition-all ${isUpdating ? "opacity-50 border-gray-500 text-gray-500" : "border-orange-500/50 text-orange-500/50 hover:opacity-100 hover:border-orange-500 hover:text-orange-500 bg-black/50"
+                        }`}
                     >
                       {isUpdating ? "Syncing..." : "[ Update Chapters ]"}
                     </button>
@@ -189,11 +199,95 @@ export default function BookDetailsPage() {
                 </div>
               )}
 
-              {chapters.length > 0 && (
-                <div className="w-full overflow-hidden">
-                  <ChapterList chapters={chapters} onSelectChapter={handleSelect} />
+              <div className="w-full overflow-hidden">
+                <div className="mb-6 flex gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 p-1 text-xs uppercase tracking-[0.25em] text-zinc-400">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("chapters")}
+                    className={`rounded-full px-4 py-2 transition-all ${activeTab === "chapters"
+                        ? "bg-orange-500 text-black"
+                        : "hover:bg-white/5 hover:text-white"
+                      }`}
+                  >
+                    Chương
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("videos")}
+                    className={`rounded-full px-4 py-2 transition-all ${activeTab === "videos"
+                        ? "bg-orange-500 text-black"
+                        : "hover:bg-white/5 hover:text-white"
+                      }`}
+                  >
+                    Video đã tạo
+                  </button>
                 </div>
-              )}
+
+                {activeTab === "chapters" ? (
+                  chapters.length > 0 ? (
+                    <ChapterList chapters={chapters} onSelectChapter={handleSelect} />
+                  ) : (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-sm text-zinc-300">
+                      Không tìm thấy chương.
+                    </div>
+                  )
+                ) : (
+                  <div className="space-y-4">
+                    {videos.length === 0 ? (
+                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-sm text-zinc-300">
+                        Chưa có video nào được tạo cho truyện này.
+                      </div>
+                    ) : (
+                      videos.map((video) => (
+                        <div key={video.id ?? video.video_url} className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-5">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm uppercase tracking-[0.2em] text-zinc-400">Video chương</p>
+                              <p className="mt-1 text-base font-semibold text-white">
+                                <div className="mt-4 space-y-2">
+                                  {video.video_title ? (
+                                    <p className="text-lg font-semibold text-white">{video.video_title}</p>
+                                  ) : (
+                                    <p className="text-lg font-semibold text-white">{video.book_title || "Video"}</p>
+                                  )}
+                                  {video.author_name ? (
+                                    <p className="text-sm text-zinc-400">Tác giả: {video.author_name}</p>
+                                  ) : null}
+                                  {video.video_description ? (
+                                    <p className="text-sm text-zinc-300">{video.video_description}</p>
+                                  ) : null}
+                                  {video.video_tags ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      {video.video_tags.split(",").map((tag) => (
+                                        <span key={tag.trim()} className="rounded-full bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-400">
+                                          {tag.trim()}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </p>
+                            </div>
+                            <div className="text-right text-sm text-zinc-400">
+                              <p>Giọng: {video.voice}</p>
+                              <p>Rate: {video.rate}</p>
+                            </div>
+                          </div>
+
+                          <a
+                            href={video.video_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-400 underline"
+                          >
+                            Xem video
+                          </a>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

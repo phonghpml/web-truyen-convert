@@ -1,6 +1,9 @@
 import asyncio
 import json
+import html
+import logging
 import re
+import time
 import urllib.parse
 import cloakbrowser
 
@@ -10,7 +13,12 @@ _context = None
 async def get_browser():
     global _context
     if _context is None:
-        print("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
+        try:
+            import backend.logging_config as _lc
+        except Exception:
+            pass
+        import logging
+        logging.getLogger(__name__).info("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
         try:
             _context = await cloakbrowser.launch_context_async(
                 headless=True,
@@ -18,9 +26,9 @@ async def get_browser():
                 locale="vi-VN",
                 timezone_id="Asia/Ho_Chi_Minh"
             )
-            print("✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công!")
+            logging.getLogger(__name__).info("✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công!")
         except Exception as e:
-            print(f"❌ Lỗi cấu hình cloakbrowser: {e}")
+            logging.getLogger(__name__).exception(f"❌ Lỗi cấu hình cloakbrowser: {e}")
             raise e
     return _context
 
@@ -30,7 +38,7 @@ async def close_browser():
         try:
             await _context.close()
         except Exception as e:
-            print(f"⚠️ Lỗi khi đóng CloakBrowser context: {e}")
+            logging.getLogger(__name__).exception(f"⚠️ Lỗi khi đóng CloakBrowser context: {e}")
         finally:
             _context = None
 
@@ -52,7 +60,7 @@ async def scrape_basic_info(url: str):
         }''')
         return data
     except Exception as e:
-        print(f"❌ Lỗi Playwright Info: {e}")
+        logging.getLogger(__name__).exception(f"❌ Lỗi Playwright Info: {e}")
         return None
     finally:
         await page.close()
@@ -83,10 +91,10 @@ async def scrape_chapters(url: str):
                 unique_chapters.append(ch)
                 seen_urls.add(ch['url'])
 
-        print(f"✅ Đã tìm thấy: {len(unique_chapters)} chương")
+        logging.getLogger(__name__).info(f"✅ Đã tìm thấy: {len(unique_chapters)} chương")
         return unique_chapters
     except Exception as e:
-        print(f"❌ Lỗi Scrape Chapters: {e}")
+        logging.getLogger(__name__).exception(f"❌ Lỗi Scrape Chapters: {e}")
         return []
     finally:
         await page.close()
@@ -126,7 +134,7 @@ async def scrape_chapter_content(url: str):
     except Exception as e:
         # Chụp ảnh lỗi để soi xem nó hiện thông báo gì (Captcha hay Cloudflare)
         await page.screenshot(path="debug_logs/error_debug.png")
-        print(f"❌ Lỗi Scrape Content: {str(e)}")
+        logging.getLogger(__name__).exception(f"❌ Lỗi Scrape Content: {str(e)}")
         return None
     finally:
         await page.close()
@@ -161,14 +169,14 @@ async def scrape_stv_basic_info(url: str):
 
         return data
     except Exception as e:
-        print(f"❌ Lỗi STV Info: {e}")
+        logging.getLogger(__name__).exception(f"❌ Lỗi STV Info: {e}")
         return None
     finally:
         await page.close()
 
 async def scrape_stv_chapters(url: str):
     url = urllib.parse.unquote(url).strip()
-    print(f"🔍 Đang lấy danh sách chương từ STV: {url}")
+    logging.getLogger(__name__).info(f"🔍 Đang lấy danh sách chương từ STV: {url}")
     context = await get_browser()
     page = await context.new_page()
     
@@ -195,7 +203,7 @@ async def scrape_stv_chapters(url: str):
 
         # --- BƯỚC B: ƯU TIÊN DÙNG DỮ LIỆU TỪ API ---
         if api_raw_data:
-            print("✅ Đã bắt được ID chương từ API!")
+            logging.getLogger(__name__).info("✅ Đã bắt được ID chương từ API!")
             return parse_stv_data(api_raw_data, url)
     
         await page.wait_for_selector(".listchapitem", timeout=15000)
@@ -203,146 +211,216 @@ async def scrape_stv_chapters(url: str):
         return await page.evaluate('''() => {
             const links = Array.from(document.querySelectorAll('a.listchapitem'));
             return links.map(a => ({
-                title_vi: a.innerText.trim(), 
-                url: a.href
+                title_vi: a.innerText.trim(),
+                url: a.href,
+                access: "regular"
             })).filter(c => c.title_vi !== "");
         }''')
     except Exception as e:
-        print(f"❌ Lỗi STV Chapters: {e}")
+        screenshot_path = f"debug_logs/stv_chapters_error_{int(time.time())}.png"
+        html_path = f"debug_logs/stv_chapters_error_{int(time.time())}.html"
+        try:
+            await page.screenshot(path=screenshot_path, timeout=120000, full_page=False)
+            logging.getLogger(__name__).warning(f"❌ Đã chụp screenshot lỗi STV Chapters: {screenshot_path}")
+        except Exception as screenshot_exc:
+            logging.getLogger(__name__).warning(f"⚠️ Không chụp được screenshot lỗi STV Chapters: {screenshot_exc}")
+            try:
+                html_content = await page.content()
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                logging.getLogger(__name__).warning(f"📄 Đã lưu HTML lỗi STV Chapters: {html_path}")
+            except Exception as html_exc:
+                logging.getLogger(__name__).exception(f"⚠️ Không lưu được HTML lỗi STV Chapters: {html_exc}")
+        logging.getLogger(__name__).exception(f"❌ Lỗi STV Chapters: {e}")
         return []
     finally:
         await page.close()
         
 def parse_stv_data(raw_str, url):
     chapters = []
-    items = raw_str.strip().split("-//-")
+    items = [item.strip() for item in raw_str.strip().split("-//-") if item.strip()]
     for index, item in enumerate(items):
-        if not item.strip(): continue
-        parts = item.split("-/-")
-        if len(parts) >= 3:
-            c_id = parts[1].strip()
-            title = parts[2].strip()
-            chapters.append({
-                "chapter_no": index + 1,
-                "title_vi": title,
-                "real_id": c_id,
-                "url": f"{url}{c_id}/"
-            })
+        text = item
+        access = "regular"
+
+        if text.lower().endswith("-/-vip"):
+            access = "vip"
+            text = text[: -len("-/-vip")].strip()
+        elif text.lower().endswith("-/-unvip"):
+            access = "unvip"
+            text = text[: -len("-/-unvip")].strip()
+
+        parts = re.split(r"-\\?/-", text, maxsplit=2)
+        if len(parts) < 3:
+            continue
+
+        _, c_id, title = parts
+        title = title.strip()
+        if not c_id or not title:
+            continue
+
+        chapters.append({
+            "chapter_no": index + 1,
+            "title_vi": title,
+            "real_id": c_id.strip(),
+            "access": access,
+            "url": f"{url}{c_id.strip()}/"
+        })
     return chapters
 
 
 async def scrape_stv_chapter_content(url: str):
     # 1. Trích xuất ID để đối chiếu (Chống lấy nhầm chương cũ)
-    print(f"🚀 [START] Đang xử lý chương: {url}")
+    logging.getLogger(__name__).info(f"🚀 [START] Đang xử lý chương: {url}")
     url = urllib.parse.unquote(url).strip()
     path_parts = [p for p in url.split("/") if p]
     try:
         target_chap_id = path_parts[-1]
         source_type = path_parts[3]
-    except:
-        print(f"❌ [ERROR] Không thể trích xuất Chapter ID từ URL: {url}")
+    except Exception as exc:
+        logging.getLogger(__name__).exception(f"❌ [ERROR] Không thể trích xuất Chapter ID từ URL: {url} | error={exc}")
         return None
 
-    print(f"🚀 [START] Đang xử lý chương: {target_chap_id}")
+    logging.getLogger(__name__).info(f"🚀 [START] Chapter ID={target_chap_id}, source_type={source_type}")
     
-    # Lấy global context đang chạy thay vì khởi tạo một browser object cồng kềnh mới
     context = await get_browser()
     page = await context.new_page()
 
-    captured_data = {"raw": None}
+    captured_data = {"raw": None, "responses": []}
 
     # 3. Lắng nghe API sajax - Có lọc ID chương
     async def handle_response(response):
         res_url = response.url
         if "sajax=readchapter" in res_url:
+            captured_data["responses"].append(res_url)
+            logging.getLogger(__name__).debug(f"🔔 [RESPONSE] readchapter URL: {res_url}")
+            try:
+                text_res = await response.text()
+            except Exception as exc:
+                logging.getLogger(__name__).exception(f"⚠️ [API ERROR] Không đọc được response text cho {res_url}: {exc}")
+                return
+
             if target_chap_id in res_url:
+                start_idx = text_res.find('{"')
+                if start_idx == -1:
+                    logging.getLogger(__name__).warning(f"⚠️ [API PARSE] Không tìm thấy JSON bắt đầu trong response cho {res_url}")
+                    logging.getLogger(__name__).debug(f"[API PARSE] Response snippet: {text_res[:200]!r}")
+                    return
+
                 try:
-                    text_res = await response.text()
-                    start_idx = text_res.find('{"')
-                    if start_idx != -1:
-                        data_json = json.loads(text_res[start_idx:])
-                        if data_json.get("code") == "0" and data_json.get("data"):
-                            captured_data["raw"] = data_json["data"]
-                            print(f"✅ [SUCCESS] Đã bắt đúng API chương {target_chap_id} ({len(data_json['data'])} ký tự)")
-                except Exception as e:
-                    print(f"⚠️ [API ERROR] Lỗi xử lý response: {e}")
+                    data_json = json.loads(text_res[start_idx:])
+                except Exception as exc:
+                    logging.getLogger(__name__).exception(f"⚠️ [API ERROR] JSON decode failed cho {res_url}: {exc}")
+                    logging.getLogger(__name__).debug(f"[API ERROR] Response snippet: {text_res[:200]!r}")
+                    return
+
+                if data_json.get("code") == "0" and data_json.get("data"):
+                    captured_data["raw"] = data_json["data"]
+                    logging.getLogger(__name__).info(
+                        f"✅ [SUCCESS] Đã bắt đúng API chương {target_chap_id} | length={len(data_json['data'])} | url={res_url}"
+                    )
+                else:
+                    logging.getLogger(__name__).warning(
+                        f"⚠️ [API DATA] API trả về code={data_json.get('code')} hoặc không có data | url={res_url}"
+                    )
+                    logging.getLogger(__name__).debug(f"[API DATA] JSON payload: {data_json}")
             else:
-                print(f"⏭️ [SKIP] Bỏ qua API không khớp ID: {res_url[-30:]}")
+                logging.getLogger(__name__).debug(f"⏭️ [SKIP] Bỏ qua API không khớp ID: {res_url}")
 
     page.on("response", handle_response)
 
     try:
-        # Bước 1: Điều hướng
-        print(f"Step 1: Điều hướng tới {url}")
-        await page.goto(url, wait_until="commit", timeout=60000)
-        
-        
-        # Bước 2: Đợi nạp script và kích hoạt API
+        logging.getLogger(__name__).debug(f"Step 1: Điều hướng tới {url}")
+        await page.route("**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2,ttf,eot,ico}", lambda route: route.abort())
+        await page.route(
+            lambda request_url: any(
+                blocked in request_url
+                for blocked in ["analytics", "hm.baidu.com", "google-analytics", "googletagmanager", "doubleclick", "adservice", "ads", "tracking"]
+            ),
+            lambda route: route.abort(),
+        )
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        logging.getLogger(__name__).debug(f"Step 1: Page loaded at {page.url}")
+
+        logging.getLogger(__name__).debug("Step 2: Đợi nạp script và kích hoạt API")
         await asyncio.sleep(1.5)
-        
-        # Thử kích hoạt nạp bằng cách click hoặc cuộn chuột
-        print("Step 2: Kích hoạt API bằng Click/Scroll...")
+
+        logging.getLogger(__name__).debug("Step 3: Thử kích hoạt API bằng Click/Scroll...")
         try:
             await page.click("#content-container", timeout=2000)
-        except:
+            logging.getLogger(__name__).debug("Step 3: Click vào #content-container thành công")
+        except Exception as exc:
+            logging.getLogger(__name__).debug(f"Step 3: Click thất bại ({exc}), sẽ thử cuộn chuột")
             await page.mouse.wheel(0, 500)
 
-        # Bước 3: Chờ dữ liệu đổ về (Tối đa 12 giây)
         found = False
         for i in range(40):
             if captured_data["raw"]:
                 found = True
+                logging.getLogger(__name__).debug(f"Step 4: Captured raw data sau {i+1} vòng lặp")
                 break
             if i % 10 == 0:
-                print(f"⏳ [WAITING] Đang đợi dữ liệu... ({i*0.3}s)")
+                logging.getLogger(__name__).debug(f"⏳ [WAITING] Đang đợi dữ liệu... ({i*0.3}s)")
             await asyncio.sleep(0.3)
 
-        # Dự phòng: Click nút nạp nếu vẫn chưa thấy
         if not found:
-            print("Step 3 (Dự phòng): Thử click nút nạp thủ công...")
+            logging.getLogger(__name__).debug("Step 5: Dự phòng click nút nếu chưa thấy dữ liệu")
             try:
                 btn = page.get_by_text("Nhấp vào để tải chương")
                 if await btn.is_visible(timeout=1000):
                     await btn.click()
+                    logging.getLogger(__name__).debug("Step 5: Click nút tải chương thành công")
                     for _ in range(20):
-                        if captured_data["raw"]: 
+                        if captured_data["raw"]:
                             found = True
+                            logging.getLogger(__name__).debug("Step 5: Captured raw data sau click nút tải chương")
                             break
                         await asyncio.sleep(0.3)
-            except:
-                pass
+                else:
+                    logging.getLogger(__name__).debug("Step 5: Nút tải chương không hiển thị")
+            except Exception as exc:
+                logging.getLogger(__name__).debug(f"Step 5: Không tìm thấy hoặc click nút tải chương được ({exc})")
 
         if not found:
-            print(f"❌ [TIMEOUT] Không bắt được dữ liệu cho chương {target_chap_id}")
-            await page.screenshot(path=f"debug_logs/debug_{target_chap_id}_2_timeout.png")
+            logging.getLogger(__name__).warning(f"❌ [TIMEOUT] Không bắt được dữ liệu cho chương {target_chap_id}")
+            screenshot_path = f"debug_logs/debug_{target_chap_id}_2_timeout.png"
+            await page.screenshot(path=screenshot_path)
+            logging.getLogger(__name__).warning(f"❌ [TIMEOUT] Đã chụp screenshot: {screenshot_path}")
             return None
 
-        
-        # Bước 4: Bóc tách nội dung
-        print(f"Step 4: Đang trích xuất nội dung (Nguồn: {source_type})...")
+        logging.getLogger(__name__).debug(f"Step 6: Bóc tách nội dung (Nguồn: {source_type})...")
         raw_data = captured_data["raw"]
-        paragraphs = []
+        logging.getLogger(__name__).debug(f"Step 6: raw_data length={len(raw_data)} | snippet={raw_data[:200]!r}")
 
-        if source_type == "sangtac":
-            paragraphs = [line.strip() for line in raw_data.split('\n') if line.strip()]
-        else:
-            for section in raw_data.split('<p>'):
-                words = re.findall(r'>([^<]+)</i>', section)
-                if words:
-                    line = " ".join(words).strip()
-                    if line:
-                        paragraphs.append(line)
-
-        return "\n\n".join(paragraphs)
+        text = html.unescape(raw_data)
+        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r'@?Bạn đang đọc bản lưu trong hệ thống', '', text)
+        text = re.sub(r'\n{2,}', '\n', text)
+        paragraphs = [line.strip() for line in text.split('\n') if line.strip()]
+        logging.getLogger(__name__).info(f"✅ [RESULT] Trích xuất xong {len(paragraphs)} đoạn từ chương {target_chap_id}")
+        return "\n".join(paragraphs)
 
     except Exception as e:
-        print(f"🔥 [CRASH] Lỗi Scraper: {str(e)}")
-        await page.screenshot(path=f"debug_logs/debug_{target_chap_id}_crash.png")
+        logging.getLogger(__name__).exception(f"🔥 [CRASH] Lỗi Scraper: {str(e)}")
+        screenshot_path = f"debug_logs/debug_{target_chap_id}_crash_{int(time.time())}.png"
+        html_path = f"debug_logs/debug_{target_chap_id}_crash_{int(time.time())}.html"
+        try:
+            await page.screenshot(path=screenshot_path, timeout=120000, full_page=False)
+            logging.getLogger(__name__).warning(f"🔥 [CRASH] Đã chụp screenshot: {screenshot_path}")
+        except Exception as screenshot_exc:
+            logging.getLogger(__name__).warning(f"⚠️ Không chụp được screenshot crash: {screenshot_exc}")
+            try:
+                html_content = await page.content()
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                logging.getLogger(__name__).warning(f"📄 Đã lưu HTML crash: {html_path}")
+            except Exception as html_exc:
+                logging.getLogger(__name__).exception(f"⚠️ Không lưu được HTML crash: {html_exc}")
         return None
     finally:
         page.remove_listener("response", handle_response)
         await page.close()
-        print(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
+        logging.getLogger(__name__).info(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
     
 import datetime
 
@@ -376,7 +454,7 @@ async def scrape_qidian_ranking(
         else:
             url = f"https://www.qidian.com/rank/{category_id}/{page_str}/chn{chn_id}/"
 
-    print(f"\n[DEBUG] 1. Khởi tạo tài nguyên an toàn cho URL mục tiêu: {url}")
+    logging.getLogger(__name__).debug(f"\n[DEBUG] 1. Khởi tạo tài nguyên an toàn cho URL mục tiêu: {url}")
     
     context = await get_browser()
     page_ctx = await context.new_page()
@@ -392,22 +470,22 @@ async def scrape_qidian_ranking(
     )
 
     try:
-        print("[DEBUG] 2. Đang tải trang hỏa tốc (wait_until='commit')...")
+        logging.getLogger(__name__).debug("[DEBUG] 2. Đang tải trang hỏa tốc (wait_until='commit')...")
         await page_ctx.goto(url, wait_until="commit", timeout=25000)
         
-        print("[DEBUG] 3. Đang chờ Javascript dựng danh sách truyện (Tối đa 15s, xong sớm đi sớm)...")
+        logging.getLogger(__name__).debug("[DEBUG] 3. Đang chờ Javascript dựng danh sách truyện (Tối đa 15s, xong sớm đi sớm)...")
         
         # SỬA Ở ĐÂY: Nhắm thẳng vào danh sách thẻ 'li' cụ thể bên trong ul để chắc chắn dữ liệu đã render xong
         # Đồng thời nâng timeout lên 15 giây để bù đắp cho những lần mạng lag, tránh bị fail oan.
         target_selector = '#book-img-text ul li, .rank-view-list ul li, .rank-body ul li'
         try:
             await page_ctx.wait_for_selector(target_selector, timeout=15000)
-            print(" -> [OK] Cấu trúc truyện đã được render hoàn tất!")
+            logging.getLogger(__name__).debug(" -> [OK] Cấu trúc truyện đã được render hoàn tất!")
         except Exception:
-            print(" -> [FAIL] Quá thời gian chờ. JS không render được danh sách truyện hoặc bị Cloudflare chặn.")
+            logging.getLogger(__name__).warning(" -> [FAIL] Quá thời gian chờ. JS không render được danh sách truyện hoặc bị Cloudflare chặn.")
             return []
 
-        print("[DEBUG] 4. Bắt đầu chạy JavaScript thực thi bóc tách dữ liệu...")
+        logging.getLogger(__name__).debug("[DEBUG] 4. Bắt đầu chạy JavaScript thực thi bóc tách dữ liệu...")
         ranking_data = await page_ctx.evaluate('''() => {
             const listContainer = document.querySelector('#book-img-text ul') || document.querySelector('.rank-view-list ul');
             if (!listContainer) return [];
@@ -436,13 +514,13 @@ async def scrape_qidian_ranking(
             }).filter(book => book !== null && book.title_cn !== "");
         }''')
         
-        print(f"[DEBUG] 5. Kết thúc xử lý. Trích xuất thành công {len(ranking_data)} truyện thô từ Qidian.")
+        logging.getLogger(__name__).debug(f"[DEBUG] 5. Kết thúc xử lý. Trích xuất thành công {len(ranking_data)} truyện thô từ Qidian.")
         return ranking_data
         
     except Exception as e:
-        print(f"❌ [CRITICAL] Lỗi phát sinh trong quá trình cào: {e}")
+        logging.getLogger(__name__).exception(f"❌ [CRITICAL] Lỗi phát sinh trong quá trình cào: {e}")
         return []
         
     finally:
-        print("[DEBUG] 6. Đóng tab cô lập.")
+        logging.getLogger(__name__).debug("[DEBUG] 6. Đóng tab cô lập.")
         await page_ctx.close()
