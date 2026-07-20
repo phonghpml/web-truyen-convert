@@ -50,7 +50,7 @@ from services.video_download import download_remote_video
 from services.youtube_uploader import build_oauth_authorization_url, exchange_code_for_tokens, refresh_access_token
 from services.youtube_video_upload import upload_video_to_youtube
 from supabase_storage import upload_video_to_supabase_storage, delete_file_from_supabase_storage
-from video_generator import ensure_output_directories, create_audio_from_text, create_video_from_image_and_audio, create_placeholder_image, VOICE_FALLBACKS, DEFAULT_VOICE, DEFAULT_TTS_RATE
+from video_generator import ensure_output_directories, create_audio_from_text, create_video_from_image_and_audio, create_placeholder_image, ALL_TTS_VOICES, NGHITTS_VOICES, DEFAULT_VOICE, DEFAULT_TTS_RATE
 
 router = APIRouter(prefix="/crawl", tags=["crawl"])
 
@@ -632,12 +632,13 @@ async def create_crawl_video(
     _set_video_progress(job_id, "prepare_assets", "Đang chuẩn bị thư mục và ảnh bìa", "Tạo file ảnh nền cho video")
     image_path = await _build_video_image_path(cover_image, cover_image_url or job.cover_url, job_id)
 
-    if voice not in VOICE_FALLBACKS:
+    if voice not in ALL_TTS_VOICES:
         VIDEO_CANCEL_TOKENS.pop(job_id, None)
         _set_video_progress(job_id, "failed", "Giọng đọc không hợp lệ", voice)
         raise HTTPException(status_code=400, detail="Giọng đọc không hợp lệ.")
 
-    audio_path = VIDEO_AUDIO_DIR / f"{job_id}_{uuid4().hex}.mp3"
+    suffix = ".wav" if voice in NGHITTS_VOICES else ".mp3"
+    audio_path = VIDEO_AUDIO_DIR / f"{job_id}_{uuid4().hex}{suffix}"
     _set_video_progress(job_id, "generate_audio", "Đang tạo file audio bằng TTS", f"voice={voice} rate={rate}")
     audio_started = perf_counter()
     try:

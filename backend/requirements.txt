@@ -12,3 +12,6 @@ edge-tts
 python-slugify
 cloakbrowser==0.4.11
 python-multipart
+onnxruntime
+phonemizer
+vietnormalizer

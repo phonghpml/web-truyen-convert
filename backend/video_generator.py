@@ -5,7 +5,10 @@ import subprocess
 from pathlib import Path
 import aiohttp
 import edge_tts
+import numpy as np
 from imageio_ffmpeg import get_ffmpeg_exe
+
+from tts_engine import NghiTTSEngine
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +17,18 @@ OUTPUT_VIDEO_HEIGHT = 720
 MAX_TTS_CHUNK_BYTES = 2800
 MAX_TTS_CONCURRENCY = 3
 MAX_TTS_RETRIES = 3
-VOICE_FALLBACKS = [
+EDGE_TTS_VOICES = [
     "vi-VN-NamMinhNeural",
     "vi-VN-HoaiMyNeural",
     "en-US-JennyNeural",
 ]
-DEFAULT_VOICE = VOICE_FALLBACKS[0]
+NGHITTS_VOICES = ["nghitts:ngochuyennew"]
+VOICE_FALLBACKS = EDGE_TTS_VOICES
+ALL_TTS_VOICES = EDGE_TTS_VOICES + NGHITTS_VOICES
+DEFAULT_VOICE = EDGE_TTS_VOICES[0]
 DEFAULT_TTS_RATE = "+0%"
+NGHITTS_MIN_CHUNK_LENGTH = 4
+NGHITTS_MAX_CHUNK_LENGTH = 500
 
 
 def _normalize_rate(rate: str) -> str:
@@ -106,6 +114,58 @@ def _sanitize_text(text: str) -> str:
     return "\n\n".join([p for p in paragraphs if p])
 
 
+def _split_nghitts_text_for_tts(text: str, max_length: int = NGHITTS_MAX_CHUNK_LENGTH, min_length: int = NGHITTS_MIN_CHUNK_LENGTH) -> list[str]:
+    if not text or not text.strip():
+        return []
+
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    chunks: list[str] = []
+
+    for line in lines:
+        ends_with_punctuation = bool(re.search(r"[.!?]$", line))
+        processed_line = line if ends_with_punctuation else f"{line}."
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])(?=\s+|$)", processed_line) if s.strip()]
+
+        current_chunk = ""
+        for sentence in sentences:
+            if len(sentence) > max_length:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                    current_chunk = ""
+
+                words = sentence.split()
+                long_chunk = ""
+                for word in words:
+                    candidate = f"{long_chunk} {word}".strip()
+                    if len(candidate) <= max_length:
+                        long_chunk = candidate
+                    else:
+                        if long_chunk:
+                            chunks.append(long_chunk)
+                        long_chunk = word
+
+                if long_chunk:
+                    current_chunk = long_chunk
+                continue
+
+            potential_chunk = f"{current_chunk} {sentence}".strip() if current_chunk else sentence
+            if len(potential_chunk) > max_length:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                current_chunk = sentence
+            elif len(potential_chunk) < min_length:
+                current_chunk = potential_chunk
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                current_chunk = sentence
+
+        if current_chunk:
+            chunks.append(current_chunk)
+
+    return chunks
+
+
 async def _generate_audio_for_chunk(chunk: str, voice: str, rate: str) -> bytes:
     last_exception: Exception | None = None
 
@@ -171,16 +231,66 @@ async def _generate_audio_chunks_parallel(chunks: list[str], voices: list[str], 
     return await asyncio.gather(*tasks)
 
 
+def _parse_nghitts_rate(rate: str, default_scales: np.ndarray) -> np.ndarray:
+    rate_clean = _normalize_rate(rate)
+    try:
+        percent = float(rate_clean.replace("+", "").replace("%", ""))
+    except ValueError:
+        percent = 0.0
+
+    base_length = float(default_scales[1])
+    duration_scale = base_length * (1.0 + percent / 100.0)
+    duration_scale = max(0.5, min(duration_scale, 3.0))
+    return np.array([float(default_scales[0]), duration_scale, float(default_scales[2])], dtype=np.float32)
+
+
+def _join_audio_arrays(audio_arrays: list[np.ndarray], sample_rate: int, pause_seconds: float = 0.25) -> np.ndarray:
+    if not audio_arrays:
+        return np.array([], dtype=np.float32)
+    if len(audio_arrays) == 1:
+        return audio_arrays[0]
+
+    pause_length = int(sample_rate * pause_seconds)
+    pause_array = np.zeros(pause_length, dtype=np.float32)
+    joined = [audio_arrays[0]]
+    for next_audio in audio_arrays[1:]:
+        joined.append(pause_array)
+        joined.append(next_audio)
+    return np.concatenate(joined)
+
+
 async def create_audio_from_text(text: str, output_path: Path, voice: str = DEFAULT_VOICE, rate: str = DEFAULT_TTS_RATE, job_id: str | None = None) -> None:
     if not text or not text.strip():
         raise ValueError("No text provided for audio generation")
 
-    if voice not in VOICE_FALLBACKS:
+    if voice in NGHITTS_VOICES:
+        engine = NghiTTSEngine("ngochuyennew")
+        normalized_text = engine.normalize_text(text)
+        normalized_text = re.sub(r"\s+", " ", normalized_text).strip()
+        tts_chunks = _split_nghitts_text_for_tts(normalized_text)
+        audio_arrays = []
+        scales = _parse_nghitts_rate(rate, engine.default_scales)
+
+        for index, chunk in enumerate(tts_chunks):
+            logger.info("Đang tạo chunk NghiTTS %s/%s | job_id=%s", index + 1, len(tts_chunks), job_id or "n/a")
+            audio_arrays.append(engine.generate_audio(chunk, scales=scales))
+
+        if not audio_arrays:
+            raise RuntimeError("No audio was generated for NghiTTS chunks")
+
+        waveform = _join_audio_arrays(audio_arrays, engine.sample_rate)
+        wav_bytes = engine.audio_to_wav_bytes(waveform, engine.sample_rate)
+
+        logger.info("Đang ghi file audio NghiTTS | job_id=%s output=%s", job_id or "n/a", output_path.name)
+        output_path.write_bytes(wav_bytes)
+        return
+
+    if voice not in EDGE_TTS_VOICES:
         voice = DEFAULT_VOICE
 
     sanitized_text = _sanitize_text(text)
     tts_chunks = _split_text_for_tts(sanitized_text)
-    voices = [voice] + [v for v in VOICE_FALLBACKS if v != voice]
+    voices = [voice] + [v for v in EDGE_TTS_VOICES if v != voice]
     rate_clean = _normalize_rate(rate)
 
     logger.info("Bắt đầu tạo audio | job_id=%s chunks=%s voice=%s rate=%s", job_id or "n/a", len(tts_chunks), voice, rate_clean)

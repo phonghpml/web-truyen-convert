@@ -72,6 +72,7 @@ export async function deleteCrawlJob(jobId: string) {
 export const VIDEO_VOICES = [
   { value: "vi-VN-NamMinhNeural", label: "Nam Minh (Tiếng Việt)" },
   { value: "vi-VN-HoaiMyNeural", label: "Hoài My (Tiếng Việt)" },
+  { value: "nghitts:ngochuyennew", label: "Ngọc Huyền (NghiTTS Việt)" },
   { value: "en-US-JennyNeural", label: "Jenny (English)" },
 ];
 
