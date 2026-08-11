@@ -12,9 +12,12 @@ export function dispatchAuthChange() {
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUser(getStoredUser());
+
     const handleAuthChange = () => setUser(getStoredUser());
     window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
     return () => window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
@@ -27,7 +30,7 @@ export function useAuth() {
   }, []);
 
   return {
-    user,
+    user: user ?? null,
     isAuthenticated: Boolean(user),
     signOut,
   };

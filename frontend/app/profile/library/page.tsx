@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@/lib/useAuth";
@@ -8,7 +9,7 @@ import { getLibraryList, toggleLibrary } from "@/lib/auth";
 
 export default function LibraryPage() {
   const { user } = useAuth();
-  const [books, setBooks] = useState<any[]>([]);
+  const [books, setBooks] = useState<Array<{ book_url: string; title_vi: string; cover_url?: string; id?: string }>>([]);
   const [loading, setLoading] = useState(true);
 
   // 1. Hàm lấy danh sách truyện đã lưu
@@ -16,8 +17,8 @@ export default function LibraryPage() {
     try {
       const result = await getLibraryList();
       setBooks(result.data || []);
-    } catch (error) {
-      console.error("Lỗi tải tủ sách:", error);
+    } catch {
+      console.error("Lỗi tải tủ sách:");
     } finally {
       setLoading(false);
     }
@@ -32,7 +33,7 @@ export default function LibraryPage() {
   }, [user]);
 
   // 2. Hàm xóa nhanh truyện khỏi tủ sách
-  const handleRemove = async (book: any) => {
+  const handleRemove = async (book: { book_url: string; title_vi: string; cover_url?: string; id?: string }) => {
     if (!confirm("Xóa truyện này khỏi tủ sách?")) return;
 
     try {
@@ -47,7 +48,7 @@ export default function LibraryPage() {
       } else {
         alert(res.error || "Không thể xóa lúc này");
       }
-    } catch (error) {
+    } catch {
       alert("Không thể xóa lúc này");
     }
   };
@@ -93,10 +94,12 @@ export default function LibraryPage() {
               <div key={book.book_url || book.id} className="group relative flex flex-col">
                 {/* Ảnh bìa & Nút Xóa */}
                 <div className="relative aspect-[3/4.2] overflow-hidden rounded-2xl border border-zinc-900 group-hover:border-orange-500/50 transition-all shadow-2xl bg-zinc-900">
-                  <img 
-                    src={book.cover_url} 
-                    alt={book.title_vi} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100" 
+                  <Image
+                    src={book.cover_url || "/placeholder.png"}
+                    alt={book.title_vi}
+                    fill
+                    className="object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100"
+                    unoptimized
                   />
                   {/* Nút Xóa nhanh */}
                   <button 

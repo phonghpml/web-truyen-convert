@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { BookResult } from "@/components/features/BookResult";
+import { Book } from "@/lib/types";
 import {
   LoadingState,
   ErrorState,
@@ -18,7 +19,7 @@ export default function SearchPage() {
   const router = useRouter();
   const query = params.query as string;
 
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +51,7 @@ export default function SearchPage() {
     }
   }, [query]);
 
-  const handleBookClick = (book: any) => {
+  const handleBookClick = (book: Book) => {
     const target = book.slug || book.source_url || book.id;
     if (target) {
       router.push(getBookLink(target));

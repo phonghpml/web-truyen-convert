@@ -49,7 +49,7 @@ def ensure_output_directories(base_dir: Path) -> None:
 
 def _split_text_for_tts(text: str, max_bytes: int = MAX_TTS_CHUNK_BYTES) -> list[str]:
     paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
-    sentence_split = re.compile(r"(?<=[.!?…])\s+")
+    sentence_split = re.compile(r"(?<=[.!?…])(?=\s+)")
     chunks: list[str] = []
     current_chunk = ""
 
@@ -59,28 +59,44 @@ def _split_text_for_tts(text: str, max_bytes: int = MAX_TTS_CHUNK_BYTES) -> list
     def _find_split_index(long_text: str) -> int:
         separators = [",", ";", ":", "—", "–", "-", " "]
         for sep in separators:
-            idx = long_text.rfind(sep, 0, max_bytes)
-            if idx >= max_bytes // 2:
-                return idx + (0 if sep == " " else 1)
-        return max_bytes
+            idx = long_text.rfind(sep, 0, len(long_text))
+            while idx != -1:
+                end_index = idx + (0 if sep == " " else 1)
+                if end_index >= max_bytes // 2 and chunk_byte_len(long_text[:end_index]) <= max_bytes:
+                    return end_index
+                idx = long_text.rfind(sep, 0, idx)
+        cut = 0
+        for i in range(1, len(long_text) + 1):
+            if chunk_byte_len(long_text[:i]) <= max_bytes:
+                cut = i
+            else:
+                break
+        return cut or 1
 
     def split_long_text(long_text: str) -> list[str]:
         parts: list[str] = []
-        remaining = long_text.strip()
+        remaining = long_text
         while remaining:
             if chunk_byte_len(remaining) <= max_bytes:
                 parts.append(remaining)
                 break
             split_at = _find_split_index(remaining)
-            part = remaining[:split_at].rstrip()
-            if not part:
+            part = remaining[:split_at]
+            if not part.strip():
                 part = remaining[:max_bytes]
             parts.append(part)
-            remaining = remaining[len(part):].lstrip()
+            remaining = remaining[len(part):]
         return parts
 
     for paragraph in paragraphs:
-        sentences = [s.strip() for s in sentence_split.split(paragraph) if s.strip()]
+        sentences: list[str] = []
+        start = 0
+        for match in sentence_split.finditer(paragraph):
+            sentences.append(paragraph[start:match.end()])
+            start = match.end()
+        if start < len(paragraph):
+            sentences.append(paragraph[start:])
+        sentences = [s for s in sentences if s.strip()]
         if not sentences:
             sentences = [paragraph]
 
@@ -96,7 +112,7 @@ def _split_text_for_tts(text: str, max_bytes: int = MAX_TTS_CHUNK_BYTES) -> list
                 current_chunk = sentence
                 continue
 
-            candidate = f"{current_chunk} {sentence}"
+            candidate = f"{current_chunk}{sentence}"
             if chunk_byte_len(candidate) <= max_bytes:
                 current_chunk = candidate
             else:
@@ -273,7 +289,15 @@ async def create_audio_from_text(text: str, output_path: Path, voice: str = DEFA
 
         for index, chunk in enumerate(tts_chunks):
             logger.info("Đang tạo chunk NghiTTS %s/%s | job_id=%s", index + 1, len(tts_chunks), job_id or "n/a")
-            audio_arrays.append(engine.generate_audio(chunk, scales=scales))
+            cleaned_chunk = re.sub(r"\s+", " ", chunk).strip()
+            if not cleaned_chunk or re.fullmatch(r"[\W_]+", cleaned_chunk):
+                logger.info("Bỏ qua chunk NghiTTS rỗng hoặc chỉ ký tự không có nghĩa | job_id=%s chunk=%s", job_id or "n/a", chunk[:120])
+                continue
+            try:
+                audio_arrays.append(engine.generate_audio(cleaned_chunk, scales=scales))
+            except Exception as exc:
+                logger.warning("Chunk NghiTTS không tạo được audio | job_id=%s chunk=%s error=%s", job_id or "n/a", cleaned_chunk[:120], exc)
+                continue
 
         if not audio_arrays:
             raise RuntimeError("No audio was generated for NghiTTS chunks")

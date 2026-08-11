@@ -7,6 +7,7 @@ import {
   Square, SkipForward, SkipBack, Gauge, User
 } from "lucide-react";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
+import { Chapter } from "@/lib/types";
 import { Navbar } from "@/components/layout/Navbar";
 
 let contentAbortController: AbortController | null = null;
@@ -21,7 +22,6 @@ export default function ChapterPage() {
   const chapterUrl = searchParams.get("url");
 
   const [paragraphs, setParagraphs] = useState<string[]>([]);
-  const [fetchedChapters, setFetchedChapters] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentSource, setContentSource] = useState<"db" | "crawler">("crawler");
   const [fontSize, setFontSize] = useState(18);
@@ -52,17 +52,25 @@ export default function ChapterPage() {
     loadingTasks.current.clear();
   };
 
-  const syncChapterTitle = useCallback((chapterList: any[] | null | undefined) => {
+  const syncChapterTitle = useCallback((chapterList: Chapter[] | null | undefined) => {
     if (!chapterList?.length || !chapterSlug) return;
 
     const normalizedChapterSlug = decodeURIComponent(chapterSlug);
-    const found = chapterList.find((c: any) =>
+    const found = chapterList.find((c: Chapter) =>
       c.slug === chapterSlug ||
       c.slug === normalizedChapterSlug ||
       c.slug === decodeURIComponent(normalizedChapterSlug)
     );
 
-    const title = found?.title_vi || found?.title || "";
+    let title = "";
+    if (found) {
+      if (typeof found.title_vi === "string" && found.title_vi.trim()) {
+        title = found.title_vi;
+      } else if (typeof found.title === "string" && found.title.trim()) {
+        title = found.title;
+      }
+    }
+
     if (title) {
       setDisplayedChapterTitle(title);
     }
@@ -86,11 +94,13 @@ export default function ChapterPage() {
         setContentSource(data.source === "db" ? "db" : "crawler");
         setLoading(false);
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error(err);
-        setLoading(false);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return;
       }
+
+      console.error(err);
+      setLoading(false);
     }
   }, []);
 
@@ -117,11 +127,10 @@ export default function ChapterPage() {
         const chRes = await fetch(`${CRAWLER_BASE_URL}/chapters?book=${encodeURIComponent(source)}`);
         const chJson = await chRes.json();
         if (chJson?.success && Array.isArray(chJson.data)) {
-          setFetchedChapters(chJson.data);
           syncChapterTitle(chJson.data);
           try { localStorage.setItem(`chapters_${slug}`, JSON.stringify(chJson.data)); } catch {}
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     };
@@ -177,8 +186,8 @@ export default function ChapterPage() {
   };
 
   const handleNavigate = (direction: "next" | "prev") => {
-    const savedChapters = JSON.parse(localStorage.getItem(`chapters_${slug}`) || "[]");
-    const currentIndex = savedChapters.findIndex((c: any) => c.slug === chapterSlug);
+    const savedChapters = JSON.parse(localStorage.getItem(`chapters_${slug}`) || "[]") as Chapter[];
+    const currentIndex = savedChapters.findIndex((c) => c.slug === chapterSlug);
     const targetIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
     if (targetIndex >= 0 && targetIndex < savedChapters.length) {
       stopAudio();

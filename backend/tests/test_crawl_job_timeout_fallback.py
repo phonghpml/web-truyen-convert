@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import routes.crawl as crawl
-from crawl_queue import CrawlJobStatus
+from crawl_queue import CrawlJobStatus, CrawlQueueManager
 import services.crawl_service as crawl_service
 
 
@@ -33,6 +33,16 @@ async def test_persist_crawl_job_swallows_db_errors(monkeypatch):
     )
 
     await crawl_service.persist_crawl_job(job)
+
+
+def test_crawl_queue_add_job_creates_job_with_expected_state():
+    manager = CrawlQueueManager()
+    job = manager.add_job("https://example.com/book")
+
+    assert job.book_url == "https://example.com/book"
+    assert job.status == CrawlJobStatus.queued
+    assert job.total_chapters == 0
+    assert job.chapters == []
 
 
 @pytest.mark.asyncio

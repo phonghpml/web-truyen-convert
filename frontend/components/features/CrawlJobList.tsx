@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Pause, Play, Trash2, Video } from "lucide-react";
 import { CrawlJob } from "@/lib/crawl-hooks";
 
@@ -44,9 +45,9 @@ export function CrawlJobList({ jobs, onPause, onResume, onDelete, onCreateVideo 
           <div key={job.job_id} className="rounded-3xl border border-zinc-800 bg-[#101010] p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex gap-4 items-start min-w-0">
-                <div className="h-24 w-20 overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800">
+                <div className="relative h-24 w-20 overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800">
                   {job.cover_url ? (
-                    <img src={job.cover_url} alt={job.title_vi || "Bìa truyện"} className="h-full w-full object-cover" />
+                    <Image src={job.cover_url} alt={job.title_vi || "Bìa truyện"} fill className="object-cover" unoptimized />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.2em] text-zinc-500">
                       No cover

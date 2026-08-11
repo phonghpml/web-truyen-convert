@@ -24,7 +24,7 @@ export default function BookDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedHistory, setSavedHistory] = useState<any>(null);
+  const [savedHistory, setSavedHistory] = useState<ReadingHistory | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [videos, setVideos] = useState<Video[]>([]);
   const [activeTab, setActiveTab] = useState<"chapters" | "videos">("chapters");
@@ -84,11 +84,11 @@ export default function BookDetailsPage() {
       ]);
 
       if (chaptersRes.chapters) setChapters(chaptersRes.chapters);
-      if (historyRes?.success) setSavedHistory(historyRes.data);
+      if (historyRes?.success) setSavedHistory(historyRes.data ?? null);
       if (libraryRes?.success) setIsSaved(!!libraryRes.data?.isSaved);
       if (videosRes?.videos) setVideos(videosRes.videos);
 
-    } catch (err) {
+    } catch {
       setError(MESSAGES.ERROR_BOOK_DETAILS);
     } finally {
       setLoading(false);
@@ -110,7 +110,7 @@ export default function BookDetailsPage() {
       });
       const data = await response.json();
       if (data.success) await loadAllData(false);
-    } catch (err) {
+    } catch {
       alert("Lỗi khi kết nối với máy chủ cập nhật.");
     } finally {
       setIsUpdating(false);
@@ -174,10 +174,13 @@ export default function BookDetailsPage() {
                       onReadClick={() => {
                         if (savedHistory) {
                           handleSelect({
-                            url: savedHistory.chapter_url,
+                            url: savedHistory.chapter_url || "",
                             title_vi: savedHistory.chapter_title,
-                            slug: savedHistory.chapter_slug
-                          } as any);
+                            slug: savedHistory.chapter_slug,
+                            title: savedHistory.chapter_title,
+                            chapter_no: 0,
+                            book_source_url: book?.source_url || "",
+                          } as Chapter);
                         } else if (firstChapter) {
                           handleSelect(firstChapter);
                         }

@@ -75,6 +75,7 @@ model Book {
 
   chapters  Chapter[]
   crawlJobs CrawlJob[]
+  videos    Video[]
 }
 
 model Chapter {
@@ -128,6 +129,7 @@ model Video {
   voice             String
   rate              String
   job_id            String
+  bookId            String?
   thumbnail_url     String?
   book_title        String?
   author_name       String?
@@ -137,7 +139,10 @@ model Video {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  book Book? @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
   @@index([book_url])
+  @@index([bookId])
 }
 
 model ReadingHistory {

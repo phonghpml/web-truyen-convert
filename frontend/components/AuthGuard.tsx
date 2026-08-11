@@ -5,38 +5,47 @@ import { useRouter, usePathname } from "next/navigation";
 import { getAuthToken } from "@/lib/auth";
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ["/login", "/register"];
+const PUBLIC_ROUTE_PREFIXES = ["/", "/login", "/register", "/rank", "/crawl", "/search", "/book"];
+
+function isPublicRoute(pathname: string) {
+  return PUBLIC_ROUTE_PREFIXES.some((prefix) => {
+    if (prefix === "/") {
+      return pathname === "/";
+    }
+    return pathname === prefix || pathname.startsWith(`${prefix}/`);
+  });
+}
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const isPublic = isPublicRoute(pathname);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(() => (isPublic ? true : null));
 
   useEffect(() => {
-    // Không check auth cho public routes
-    if (PUBLIC_ROUTES.includes(pathname)) {
+    if (isPublic) {
       setIsAuthenticated(true);
       return;
     }
 
-    // Check nếu user có token
     const token = getAuthToken();
-    if (!token) {
-      // Redirect tới login nếu không có token
-      router.push("/login");
+    if (token) {
+      setIsAuthenticated(true);
       return;
     }
 
-    setIsAuthenticated(true);
-  }, [pathname, router]);
+    setIsAuthenticated(false);
+    router.push("/login");
+  }, [pathname, router, isPublic]);
 
-  // Loading state - render nothing while checking auth
   if (isAuthenticated === null) {
-    return <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-zinc-400 text-sm animate-pulse">Đang kiểm tra xác thực...</p>
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-zinc-400 text-sm animate-pulse">Đang kiểm tra xác thực...</p>
+        </div>
       </div>
-    </div>;
+    );
   }
 
   return <>{children}</>;

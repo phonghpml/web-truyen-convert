@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Book, Chapter, Video, ApiResponse } from "./types";
 import { ENDPOINTS, MESSAGES } from "./constants";
 
@@ -17,48 +17,52 @@ export function useFetch<T>(
   url: string | null,
   options?: RequestInit
 ): UseFetchState<T> {
-  const [state, setState] = useState<UseFetchState<T>>({
-    data: null,
-    loading: true,
-    error: null,
-  });
+    const initialState = useMemo<UseFetchState<T>>(
+      () => ({ data: null, loading: false, error: null }),
+      []
+    );
 
-  useEffect(() => {
-    if (!url) {
-      setState({ data: null, loading: false, error: null });
-      return;
-    }
+    const [state, setState] = useState<UseFetchState<T>>(initialState);
 
-    const fetchData = async () => {
-      try {
-        setState((prev) => ({ ...prev, loading: true, error: null }));
-        const response = await fetch(url, options);
-        const result: ApiResponse<T> = await response.json();
+    useEffect(() => {
+      if (!url) {
+        return;
+      }
 
-        if (result.success && result.data) {
-          setState({ data: result.data, loading: false, error: null });
-        } else {
+      const fetchData = async () => {
+        try {
+          setState((prev) => ({ ...prev, loading: true, error: null }));
+          const response = await fetch(url, options);
+          const result: ApiResponse<T> = await response.json();
+
+          if (result.success && result.data) {
+            setState({ data: result.data, loading: false, error: null });
+          } else {
+            setState({
+              data: null,
+              loading: false,
+              error: result.error || MESSAGES.ERROR,
+            });
+          }
+        } catch (err) {
+          console.error("Fetch error:", err);
           setState({
             data: null,
             loading: false,
-            error: result.error || MESSAGES.ERROR,
+            error: MESSAGES.ERROR,
           });
         }
-      } catch (err) {
-        console.error("Fetch error:", err);
-        setState({
-          data: null,
-          loading: false,
-          error: MESSAGES.ERROR,
-        });
-      }
-    };
+      };
 
-    fetchData();
-  }, [url, options]);
+      fetchData();
+    }, [url, options]);
 
-  return state;
-}
+    if (!url) {
+      return initialState;
+    }
+
+    return state;
+  }
 
 /**
  * Fetch books with limit

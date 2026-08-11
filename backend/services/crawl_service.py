@@ -52,10 +52,6 @@ def _crawl_job_to_db_dict(job: CrawlJobData) -> dict:
         "job_id": job.job_id,
         "book_url": job.book_url,
         "status": job.status.value,
-        "title_vi": job.title_vi,
-        "author_vi": job.author_vi,
-        "description_vi": job.description_vi,
-        "cover_url": job.cover_url,
         "total_chapters": job.total_chapters,
         "crawled_chapters": job.crawled_chapters,
         "current_chapter_index": job.current_chapter_index,
@@ -79,23 +75,28 @@ async def save_book_info(job: CrawlJobData, raw_info: dict | None):
     if not job:
         return
 
-    if raw_info:
-        job.title_vi = raw_info.get("title_vi") or job.title_vi
-        job.cover_url = raw_info.get("cover_url") or job.cover_url
-        job.author_vi = raw_info.get("author_vi") or job.author_vi
-        job.description_vi = raw_info.get("description_vi") or job.description_vi
+    raw_info = raw_info or {}
+    try:
+        existing_book = await db_mod.client.book.find_unique(where={"source_url": job.book_url})
+    except Exception:
+        existing_book = None
 
-    if not job.title_vi:
-        job.title_vi = "Truyện từ SangTacViet"
+    if not raw_info and existing_book:
+        return
+
+    title_vi = raw_info.get("title_vi") or (getattr(existing_book, "title_vi", None) if existing_book else None) or "Truyện từ SangTacViet"
+    author_vi = raw_info.get("author_vi") or (getattr(existing_book, "author_vi", None) if existing_book else None)
+    description_vi = raw_info.get("description_vi") or (getattr(existing_book, "description_vi", None) if existing_book else None)
+    cover_url = raw_info.get("cover_url") or (getattr(existing_book, "cover_url", None) if existing_book else None)
 
     try:
         await db_mod.save_book(_build_book_data(
             source_url=job.book_url,
-            title_vi=job.title_vi,
+            title_vi=title_vi,
             title_cn=None,
-            author_vi=job.author_vi,
-            description_vi=job.description_vi,
-            cover_url=job.cover_url,
+            author_vi=author_vi,
+            description_vi=description_vi,
+            cover_url=cover_url,
         ))
     except Exception as exc:
         logger.warning("Skipping book persistence for job %s because DB is unavailable: %s", job.job_id, exc)
@@ -126,10 +127,7 @@ async def crawl_job_worker(job: CrawlJobData, manager: CrawlQueueManager) -> Non
         job.updated_at = datetime.now(timezone.utc)
         await persist_crawl_job(job)
 
-        raw_info = None
-        if not job.title_vi:
-            raw_info = await scr.scrape_stv_basic_info(job.book_url)
-
+        raw_info = await scr.scrape_stv_basic_info(job.book_url)
         await save_book_info(job, raw_info)
 
         raw_chapters = await scr.scrape_stv_chapters(job.book_url)
@@ -225,12 +223,6 @@ async def submit_crawl(raw_url: str, queue_manager: CrawlQueueManager):
 
     await db_mod.save_chapters(normalized_url, chapters, replace_existing=True)
 
-    job = queue_manager.add_job(
-        normalized_url,
-        title_vi=book_data["title_vi"],
-        author_vi=book_data.get("author_vi"),
-        description_vi=book_data.get("description_vi"),
-        cover_url=book_data.get("cover_url"),
-    )
+    job = queue_manager.add_job(normalized_url)
     await persist_crawl_job(job)
     return job

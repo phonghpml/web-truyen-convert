@@ -31,6 +31,7 @@ export default function CrawlPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [videosLoading, setVideosLoading] = useState(false);
   const [videosError, setVideosError] = useState<string | null>(null);
+  const [videosSuccess, setVideosSuccess] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [videoAbortController, setVideoAbortController] = useState<AbortController | null>(null);
 
@@ -250,16 +251,22 @@ export default function CrawlPage() {
   };
 
   const handleDeleteVideo = async (videoId: string) => {
+    setVideosError(null);
+    setVideosSuccess(null);
+
     const result = await deleteVideo(videoId);
     if (result.success) {
-      setVideos((prev) => prev.filter((video) => (video.id ?? video.video_url) !== videoId));
       await loadVideosForJobs();
+      setVideosError(null);
+      setVideosSuccess(null);
     } else {
       setVideosError(result.error || "Lỗi khi xóa video");
     }
   };
 
-  const handlePublishVideo = async (videoId: string) => {
+  const handlePublishVideo = async (videoId: string, jobId?: string) => {
+    setVideosError(null);
+    setVideosSuccess(null);
     const result = await publishVideoToYouTube(videoId);
     if (!result.success) {
       setVideosError(result.error || "Lỗi khi đăng video lên YouTube");
@@ -272,8 +279,29 @@ export default function CrawlPage() {
       return;
     }
 
-    setVideosError(null);
     await loadVideosForJobs();
+
+    // If we have a jobId, poll the progress endpoint briefly to surface the YouTube publish notification
+    if (jobId) {
+      try {
+        const start = Date.now();
+        const timeout = 10000; // 10s
+        while (Date.now() - start < timeout) {
+          await new Promise((r) => setTimeout(r, 800));
+          const json = await fetchCrawlVideoProgress(jobId);
+          if (json?.success && json?.data) {
+            const step = json.data.step;
+            const detail = json.data.detail;
+            if (step === "published" || step === "youtube_published" || step === "done") {
+              setVideosSuccess(`Đã đăng lên YouTube${detail ? `: ${detail}` : ""}`);
+              break;
+            }
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }
   };
 
   const handleRefresh = async () => {
@@ -361,6 +389,8 @@ export default function CrawlPage() {
                 <div className="text-sm text-zinc-400">Đang tải video...</div>
               ) : videosError ? (
                 <div className="rounded-3xl border border-red-700 bg-red-950/30 p-5 text-red-300">{videosError}</div>
+              ) : videosSuccess ? (
+                <div className="rounded-3xl border border-emerald-500 bg-emerald-950/30 p-5 text-emerald-200">{videosSuccess}</div>
               ) : videos.length === 0 ? (
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-sm text-zinc-300">Chưa có video nào được tạo.</div>
               ) : (

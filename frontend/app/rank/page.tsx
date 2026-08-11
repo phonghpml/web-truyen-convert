@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Image from "next/image";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from "@/components/layout/Navbar";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
@@ -74,13 +75,16 @@ const BOOK_CATEGORIES = [
 
 interface BookItem {
   rank: number;
-  title: string;
-  author: string;
-  category: string;
-  intro: string;
-  coverUrl: string;
-  sourceUrl: string;
-  slug: string;
+  title?: string;
+  title_cn?: string;
+  author?: string;
+  category?: string;
+  category_cn?: string;
+  intro?: string;
+  desc_vi?: string;
+  coverUrl?: string;
+  sourceUrl?: string;
+  slug?: string;
 }
 
 function RankContent() {
@@ -159,7 +163,8 @@ function RankContent() {
   }, [currentType, currentChn, currentPage, currentYear, currentMonth, searchParams]);
 
   const handleNavigateToSangTacViet = (book: BookItem) => {
-    let targetUrl = `https://sangtacviet.com/truyen/?find=${encodeURIComponent(book.title)}`;
+    const searchTitle = book.title || book.title_cn || 'Web Truyen';
+    let targetUrl = `https://sangtacviet.com/truyen/?find=${encodeURIComponent(searchTitle)}`;
 
     if (book.sourceUrl) {
       const idMatch = book.sourceUrl.match(/book\/(\d+)/);
@@ -182,7 +187,7 @@ function RankContent() {
             {getActiveRankMeta().name}
           </h1>
           <span className="text-[10px] md:text-xs font-mono text-zinc-600 tracking-wider uppercase">
-            // {getActiveRankMeta().sub}
+            {"// "}{getActiveRankMeta().sub}
           </span>
         </div>
 
@@ -313,14 +318,14 @@ function RankContent() {
 
                       <div className="flex flex-row items-start gap-3 md:gap-5 w-full">
                         
-                        <div className="w-16 h-24 sm:w-20 sm:h-28 bg-zinc-900 rounded-md overflow-hidden shrink-0 shadow-lg border border-zinc-900/50">
+                        <div className="relative w-16 h-24 sm:w-20 sm:h-28 bg-zinc-900 rounded-md overflow-hidden shrink-0 shadow-lg border border-zinc-900/50">
                           {book.coverUrl ? (
-                            <img 
-                              src={book.coverUrl} 
-                              alt={book.title}
+                            <Image
+                              src={book.coverUrl}
+                              alt={book.title || book.title_cn || 'Bìa truyện'}
+                              fill
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              referrerPolicy="no-referrer"
-                              loading="lazy"
+                              unoptimized
                             />
                           ) : (
                             <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-700 text-[9px] uppercase text-center p-1">
@@ -332,22 +337,22 @@ function RankContent() {
                         <div className="flex flex-col justify-between flex-1 min-w-0 min-h-[96px] sm:min-h-[112px]">
                           <div className="space-y-1 w-full">
                             <h3 className="font-bold text-sm md:text-base text-zinc-100 whitespace-normal sm:truncate group-hover:text-orange-500 transition-colors tracking-tight leading-snug">
-                              {book.title}
+                              {book.title || book.title_cn || 'Tiêu đề không rõ'}
                             </h3>
                             
                             <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-0.5 text-[11px] md:text-xs text-zinc-400 w-full">
                               <span className="font-medium flex items-center gap-1 text-zinc-300 sm:text-zinc-400 break-all sm:break-normal">
-                                <User size={11} className="text-zinc-600 shrink-0" /> {book.author}
+                                <User size={11} className="text-zinc-600 shrink-0" /> {book.author || 'Tác giả ẩn danh'}
                               </span>
                               <span className="text-zinc-800 hidden sm:inline">|</span>
                               <span className="text-zinc-500 flex items-center gap-1 sm:truncate">
-                                <Layers size={11} className="text-zinc-700 shrink-0" /> {book.category}
+                                <Layers size={11} className="text-zinc-700 shrink-0" /> {book.category || book.category_cn || 'Chưa phân loại'}
                               </span>
                             </div>
                             
                             <div className="text-[11px] md:text-xs text-zinc-400 leading-relaxed pt-0.5 break-words">
                               <p className={`transition-all duration-200 ${isExpanded ? '' : 'line-clamp-2 sm:line-clamp-3'}`}>
-                                {book.intro}
+                                {book.intro || book.desc_vi || 'Chưa có tóm tắt nội dung.'}
                               </p>
                               {book.intro && book.intro.length > 50 && (
                                 <button

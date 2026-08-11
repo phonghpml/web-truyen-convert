@@ -69,6 +69,20 @@ def _build_chapter_range(chapter_start: int, chapter_count: int, total_chapters:
     return chapter_start, last_index
 
 
+async def _resolve_job_book_metadata(job: CrawlJobData) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    try:
+        book = await db_mod.client.book.find_unique(where={"source_url": normalize_source_url(job.book_url)})
+    except Exception:
+        book = None
+
+    return (
+        getattr(book, "title_vi", None),
+        getattr(book, "author_vi", None),
+        getattr(book, "description_vi", None),
+        getattr(book, "cover_url", None),
+    )
+
+
 class CrawlSubmitRequest(BaseModel):
     url: str
 
@@ -210,6 +224,8 @@ async def _load_job_chapters(job: CrawlJobData) -> None:
 
 
 async def _job_to_payload(job: CrawlJobData, db_chapter_count: int | None = None, include_chapters: bool = True) -> Dict:
+    book_title, author_vi, description_vi, cover_url = await _resolve_job_book_metadata(job)
+
     if include_chapters:
         await _load_job_chapters(job)
 
@@ -236,10 +252,10 @@ async def _job_to_payload(job: CrawlJobData, db_chapter_count: int | None = None
     payload = {
         "job_id": job.job_id,
         "book_url": job.book_url,
-        "title_vi": job.title_vi,
-        "author_vi": job.author_vi,
-        "description_vi": job.description_vi,
-        "cover_url": job.cover_url,
+        "title_vi": book_title,
+        "author_vi": author_vi,
+        "description_vi": description_vi,
+        "cover_url": cover_url,
         "status": job.status.value,
         "total_chapters": job.total_chapters,
         "crawled_chapters": crawled_chapters,
@@ -292,10 +308,6 @@ def _set_video_progress(job_id: str, step: str, message: str, detail: Optional[s
         payload["detail"] = detail
     VIDEO_PROGRESS[job_id] = payload
     logger.info("Video progress | job_id=%s step=%s message=%s detail=%s", job_id, step, message, detail)
-
-
-def _clear_video_progress(job_id: str) -> None:
-    VIDEO_PROGRESS.pop(job_id, None)
 
 
 async def _download_image(source_url: str, dest: Path) -> None:
@@ -406,10 +418,6 @@ def _job_to_db_dict(job: CrawlJobData) -> dict:
         "job_id": job.job_id,
         "book_url": job.book_url,
         "status": job.status.value,
-        "title_vi": job.title_vi,
-        "author_vi": job.author_vi,
-        "description_vi": job.description_vi,
-        "cover_url": job.cover_url,
         "total_chapters": job.total_chapters,
         "crawled_chapters": job.crawled_chapters,
         "current_chapter_index": job.current_chapter_index,
@@ -441,10 +449,6 @@ def _row_to_job(row: dict) -> CrawlJobData:
         current_chapter_index=getattr(row, "current_chapter_index", 0),
         current_chapter_title=getattr(row, "current_chapter_title", None),
         current_chapter_url=getattr(row, "current_chapter_url", None),
-        title_vi=getattr(row, "title_vi", None),
-        author_vi=getattr(row, "author_vi", None),
-        description_vi=getattr(row, "description_vi", None),
-        cover_url=getattr(row, "cover_url", None),
         chapters=[],
     )
 
@@ -559,23 +563,26 @@ async def create_crawl_video(
     )
 
     normalized_book_url = normalize_source_url(job.book_url)
-    total_chapters = getattr(job, "total_chapters", None) or await _get_db_chapter_count(normalized_book_url)
+    story_chapter_count = await db_mod.client.chapter.count(
+        where={"book_source_url": normalized_book_url, "is_story_content": True}
+    )
     try:
-        chapter_start, last_index = _build_chapter_range(chapter_start, chapter_count, total_chapters)
+        chapter_start, last_index = _build_chapter_range(chapter_start, chapter_count, story_chapter_count)
     except ValueError as exc:
         _set_video_progress(job_id, "failed", "Dữ liệu chương không hợp lệ", str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    _set_video_progress(job_id, "fetch_chapters", "Đang lấy danh sách chương từ database", f"{chapter_start}-{last_index}")
+    _set_video_progress(job_id, "fetch_chapters", "Đang lấy danh sách chương story từ database", f"story {chapter_start}-{last_index}")
     chapter_fetch_started = perf_counter()
     try:
         chapters = await db_mod.client.chapter.find_many(
             where={
                 "book_source_url": normalized_book_url,
-                "chapter_no": {"gte": chapter_start, "lte": last_index},
                 "is_story_content": True,
             },
             order={"chapter_no": "asc"},
+            skip=chapter_start - 1,
+            take=chapter_count,
         )
     except Exception as exc:
         logger.exception("Lỗi khi lấy danh sách chương để tạo video")
@@ -589,17 +596,25 @@ async def create_crawl_video(
         datetime.now().strftime("%H:%M:%S.%f")[:-3],
     )
 
-    if not chapters:
-        _set_video_progress(job_id, "failed", "Không tìm thấy chương phù hợp", "Database không có chương trong phạm vi đã chọn")
-        raise HTTPException(status_code=400, detail="Không tìm thấy chương cho truyện này")
+    if len(chapters or []) < chapter_count:
+        _set_video_progress(job_id, "failed", "Không tìm thấy chương phù hợp", "Không có đủ chương truyện trong phạm vi đã chọn")
+        raise HTTPException(status_code=400, detail="Không có đủ chương truyện có nội dung để tạo video")
 
     chapter_slice = chapters
+
     chapter_urls = []
+    chapter_nos = []
     for chapter in chapter_slice:
         chapter_url = getattr(chapter, "url", None) if not isinstance(chapter, dict) else chapter.get("url")
+        chapter_no = getattr(chapter, "chapter_no", None) if not isinstance(chapter, dict) else chapter.get("chapter_no")
         if not chapter_url:
             raise HTTPException(status_code=400, detail="Chương không chứa URL")
         chapter_urls.append(chapter_url)
+        if isinstance(chapter_no, int):
+            chapter_nos.append(chapter_no)
+
+    actual_chapter_start = min(chapter_nos) if chapter_nos else chapter_start
+    actual_chapter_end = max(chapter_nos) if chapter_nos else chapter_start
 
     _set_video_progress(job_id, "fetch_content", "Đang lấy nội dung từng chương", f"{len(chapter_slice)} chương")
     content_fetch_started = perf_counter()
@@ -630,12 +645,10 @@ async def create_crawl_video(
     cancel_event = asyncio.Event()
     VIDEO_CANCEL_TOKENS[job_id] = cancel_event
     _set_video_progress(job_id, "prepare_assets", "Đang chuẩn bị thư mục và ảnh bìa", "Tạo file ảnh nền cho video")
-    image_path = await _build_video_image_path(cover_image, cover_image_url or job.cover_url, job_id)
 
-    if voice not in ALL_TTS_VOICES:
-        VIDEO_CANCEL_TOKENS.pop(job_id, None)
-        _set_video_progress(job_id, "failed", "Giọng đọc không hợp lệ", voice)
-        raise HTTPException(status_code=400, detail="Giọng đọc không hợp lệ.")
+    book = await db_mod.client.book.find_unique(where={"source_url": normalized_book_url})
+    cover_url = getattr(book, "cover_url", None) if book else None
+    image_path = await _build_video_image_path(cover_image, cover_image_url or cover_url, job_id)
 
     suffix = ".wav" if voice in NGHITTS_VOICES else ".mp3"
     audio_path = VIDEO_AUDIO_DIR / f"{job_id}_{uuid4().hex}{suffix}"
@@ -683,16 +696,21 @@ async def create_crawl_video(
             fallback_video_url,
         )
         _cleanup_uploaded_assets(job_id, video_url, fallback_video_url)
-        thumbnail_url = cover_image_url or job.cover_url
+        book_id = getattr(book, "id", None) if book else None
+        book_title = getattr(book, "title_vi", None) or "Video truyện"
+        author_name = getattr(book, "author_vi", None)
+        cover_url = getattr(book, "cover_url", None) if book else None
+        thumbnail_url = cover_image_url or cover_url
         if not thumbnail_url and image_path:
             thumbnail_url = f"{base_url}/static/videos/inputs/{image_path.name}"
 
         publish_metadata = build_video_publish_metadata(
-            book_title=job.title_vi or "Video truyện",
-            author_name=job.author_vi,
-            chapter_start=chapter_start,
-            chapter_count=chapter_count,
-            chapter_title=job.current_chapter_title,
+            book_title=book_title,
+            author_name=author_name,
+            story_chapter_start=chapter_start,
+            story_chapter_end=chapter_start + chapter_count - 1,
+            actual_chapter_start=actual_chapter_start,
+            actual_chapter_end=actual_chapter_end,
         )
 
         _set_video_progress(job_id, "save_metadata", "Đang lưu metadata và kết nối video", output_path.name)
@@ -706,8 +724,9 @@ async def create_crawl_video(
                 "voice": voice,
                 "rate": rate,
                 "job_id": job_id,
+                "bookId": book_id,
                 "thumbnail_url": thumbnail_url,
-                "book_title": job.title_vi,
+                "book_title": book_title,
                 "author_name": publish_metadata.get("author_name"),
                 "video_title": publish_metadata.get("video_title"),
                 "video_description": publish_metadata.get("video_description"),
@@ -734,6 +753,8 @@ async def create_crawl_video(
             "success": True,
             "data": {
                 "video_url": video_url,
+                "chapter_start": chapter_start,
+                "chapter_count": chapter_count,
             },
         }
     except HTTPException as exc:
@@ -851,6 +872,11 @@ async def delete_crawl_video(video_id: str):
     deleted = await db_mod.delete_video(video_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Video không tìm thấy")
+    try:
+        if job_id:
+            _set_video_progress(job_id, "deleted", "Đã xóa video", video_id)
+    except Exception:
+        logger.exception("Failed to set VIDEO_PROGRESS for delete | video_id=%s job_id=%s", video_id, job_id)
     return {"success": True, "message": "Đã xóa video"}
 
 
@@ -911,18 +937,23 @@ async def publish_video_to_youtube(video_id: str):
     access_token = token_response.get("access_token")
     if not access_token:
         raise HTTPException(status_code=400, detail="Không thể lấy access token từ Google")
-    # robustly extract video_url whether `video_row` is a dict, prisma model, or has camelCase keys
+    # robustly extract video_url and job_id whether `video_row` is a dict, prisma model, or has camelCase keys
     video_url = None
+    job_id = None
     try:
         if isinstance(video_row, dict):
             video_url = video_row.get("video_url") or video_row.get("videoUrl")
+            job_id = video_row.get("job_id") or video_row.get("jobId")
         else:
             # prisma model may expose attributes or a dict-like interface
             video_url = getattr(video_row, "video_url", None) or getattr(video_row, "videoUrl", None)
+            job_id = getattr(video_row, "job_id", None) or getattr(video_row, "jobId", None)
             if not video_url and hasattr(video_row, "__dict__"):
-                video_url = getattr(video_row, "__dict__", {}).get("video_url") or getattr(video_row, "__dict__", {}).get("videoUrl")
+                vid_dict = getattr(video_row, "__dict__", {})
+                video_url = vid_dict.get("video_url") or vid_dict.get("videoUrl")
+                job_id = job_id or vid_dict.get("job_id") or vid_dict.get("jobId")
     except Exception:
-        logger.exception("Lỗi khi lấy video_url từ video_row")
+        logger.exception("Lỗi khi lấy video_url và job_id từ video_row")
     if not video_url:
         raise HTTPException(status_code=400, detail="Video chưa có URL để đăng lên YouTube")
 
@@ -950,6 +981,12 @@ async def publish_video_to_youtube(video_id: str):
         )
 
         youtube_video_id = upload_result.get("id") or upload_result.get("videoId")
+        try:
+            if job_id:
+                _set_video_progress(job_id, "published", "Đã đăng lên YouTube", str(youtube_video_id))
+        except Exception:
+            logger.exception("Failed to set VIDEO_PROGRESS for publish | video_id=%s job_id=%s", video_id, job_id)
+
         return {
             "success": True,
             "data": {

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useBooks } from "@/lib/hooks";
 import { getBookLink } from "@/lib/utils";
@@ -46,10 +47,12 @@ export default function BooksDisplay() {
             {/* Cover Image */}
             <div className="relative overflow-hidden bg-gray-900 aspect-[3/4]">
               {book.cover_url ? (
-                <img
+                <Image
                   src={book.cover_url}
                   alt={book.title_vi}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                  fill
+                  className="object-cover group-hover:scale-110 transition-transform duration-300"
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">

@@ -12,18 +12,21 @@ export interface Book {
   title_vi: string;
   title_en?: string;
   cover_url?: string;
+  author_vi?: string;
+  description_vi?: string;
   chapters_count: number;
   views_count?: number;
   updated_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface Chapter {
   id?: string;
   _id?: string;
   title: string;
+  title_vi?: string;
   url: string;
-  [key: string]: any;
+  [key: string]: unknown;
   slug: string;
   chapter_no: number;
   updated_at?: string;
@@ -35,7 +38,7 @@ export interface ChapterDetail extends Chapter {
   content?: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -48,7 +51,7 @@ export interface BooksApiResponse extends ApiResponse<Book[]> {
   skip?: number;
 }
 
-export interface ChaptersApiResponse extends ApiResponse<Chapter[]> { }
+export type ChaptersApiResponse = ApiResponse<Chapter[]>;
 
 export interface Video {
   id?: string;
@@ -79,12 +82,12 @@ export interface AuthUser {
   name?: string;
 }
 
-export interface AuthResponse extends ApiResponse<{
+export type AuthResponse = ApiResponse<{
   token: string;
   user: AuthUser;
-}> {}
+}>;
 
-export interface LibraryStatusResponse extends ApiResponse<{ isSaved: boolean }> {}
+export type LibraryStatusResponse = ApiResponse<{ isSaved: boolean }>;
 
 export interface ReadingHistory {
   _id?: string;
@@ -96,4 +99,4 @@ export interface ReadingHistory {
   updated_at: string | Date;
 }
 
-export interface HistoryApiResponse extends ApiResponse<ReadingHistory> { }
+export type HistoryApiResponse = ApiResponse<ReadingHistory>;

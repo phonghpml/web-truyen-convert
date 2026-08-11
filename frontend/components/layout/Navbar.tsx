@@ -73,7 +73,7 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
 
       {/* 2. KHỐI USER & MODAL LIST */}
       <div className="relative" ref={menuRef}>
-        {isLoading ? (
+        {isLoading || user === undefined ? (
           <div className="flex items-center gap-2 bg-zinc-900/50 px-4 py-2 rounded-full border border-zinc-800 animate-pulse">
             <Loader2 size={12} className="animate-spin text-zinc-600" />
           </div>

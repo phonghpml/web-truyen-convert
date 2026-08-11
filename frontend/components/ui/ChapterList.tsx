@@ -1,10 +1,10 @@
 "use client";
 import React from 'react';
-import { ArrowUpDown } from 'lucide-react';
+import { Chapter } from '@/lib/types';
 
 interface ChapterListProps {
-  chapters: any[];
-  onSelectChapter: (chapter: any) => void;
+  chapters: Chapter[];
+  onSelectChapter: (chapter: Chapter) => void;
 }
 
 export const ChapterList = ({ chapters, onSelectChapter }: ChapterListProps) => {

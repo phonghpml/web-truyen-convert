@@ -8,7 +8,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [clientError, setClientError] = useState<string | null>(null);
   const router = useRouter();
 
   const validateLogin = () => {
@@ -21,7 +20,6 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const validationError = validateLogin();
-    setClientError(validationError);
     if (validationError) {
       setFeedback({ type: 'error', message: validationError });
       return;
@@ -42,7 +40,7 @@ export default function Login() {
       saveAuth(res.data.token, res.data.user);
       setFeedback({ type: 'success', message: 'Đăng nhập thành công!' });
       setTimeout(() => router.push("/"), 500);
-    } catch (err) {
+    } catch {
       setFeedback({ type: 'error', message: 'Đã có lỗi xảy ra!' });
     } finally {
       setLoading(false);
@@ -76,7 +74,6 @@ export default function Login() {
                 className="w-full p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl text-sm outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all placeholder:text-zinc-700"
                 onChange={(e) => {
                   setEmail(e.target.value.toLowerCase());
-                  setClientError(null);
                   setFeedback(null);
                 }} 
               />
@@ -89,7 +86,6 @@ export default function Login() {
                 className="w-full p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl text-sm outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all placeholder:text-zinc-700"
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  setClientError(null);
                   setFeedback(null);
                 }} 
               />

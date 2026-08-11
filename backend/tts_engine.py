@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import unicodedata
 from pathlib import Path
 from typing import Optional
@@ -48,9 +49,21 @@ class NghiTTSEngine:
 
     def normalize_text(self, text: str) -> str:
         try:
-            return self.normalizer.normalize(text)
+            normalized = self.normalizer.normalize(text)
         except Exception:
-            return text
+            normalized = text
+
+        if not normalized:
+            return ""
+
+        normalized = normalized.strip()
+        normalized = normalized.replace("“", '"').replace("”", '"').replace("’", "'")
+        normalized = normalized.replace("—", " - ").replace("–", " - ")
+        normalized = normalized.replace("…", "...")
+        normalized = re.sub(r"\s+", " ", normalized)
+        normalized = re.sub(r"\s+([,.;:!?])", r"\1", normalized)
+        normalized = normalized.strip()
+        return normalized
 
     def generate_audio(self, text: str, speaker_id: int = 0, scales: Optional[list[float]] = None) -> np.ndarray:
         normalized = self.normalize_text(text)

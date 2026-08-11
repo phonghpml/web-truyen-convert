@@ -53,10 +53,6 @@ class CrawlJobData:
     current_chapter_index: int = 0
     current_chapter_title: Optional[str] = None
     current_chapter_url: Optional[str] = None
-    title_vi: Optional[str] = None
-    author_vi: Optional[str] = None
-    description_vi: Optional[str] = None
-    cover_url: Optional[str] = None
     chapters: List[CrawlChapterItem] = field(default_factory=list)
 
 
@@ -68,14 +64,7 @@ class CrawlQueueManager:
     def _generate_job_id(self) -> str:
         return str(uuid.uuid4())
 
-    def add_job(
-        self,
-        book_url: str,
-        title_vi: Optional[str] = None,
-        author_vi: Optional[str] = None,
-        description_vi: Optional[str] = None,
-        cover_url: Optional[str] = None,
-    ) -> CrawlJobData:
+    def add_job(self, book_url: str) -> CrawlJobData:
         cleaned_url = book_url.strip()
         if not cleaned_url:
             raise ValueError("Invalid URL for crawl job")
@@ -92,8 +81,6 @@ class CrawlQueueManager:
             created_at=now,
             updated_at=now,
             status=CrawlJobStatus.queued,
-            title_vi=title_vi,
-            cover_url=cover_url,
         )
         self._jobs[job_id] = job
         self._queue.append(job_id)

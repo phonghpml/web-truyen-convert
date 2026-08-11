@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import CrawlSection from "@/components/features/CrawlSection";
 import BooksDisplay from "@/components/features/BooksDisplay";

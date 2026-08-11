@@ -1,14 +1,16 @@
 import { useState } from "react";
+import { Book, ReadingHistory } from "@/lib/types";
 
 // Ảnh mặc định khi cover_url rỗng hoặc bị lỗi
 const DEFAULT_COVER = "https://placehold.co/400x600/111/f97316?text=No+Cover";
 
 export const BookCard = ({ data, savedHistory,
   onReadClick, isSaved, onSaveClick }: {
-    data: any, savedHistory: any,
-    onReadClick: () => void,
-    isSaved: boolean,
-    onSaveClick: () => void
+    data: Book;
+    savedHistory: ReadingHistory | null;
+    onReadClick: () => void;
+    isSaved: boolean;
+    onSaveClick: () => void;
   }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -18,6 +20,7 @@ export const BookCard = ({ data, savedHistory,
       {/* 1. Phần ảnh: Xử lý lỗi src rỗng và link die */}
       <div className="relative group shrink-0 sticky top-0">
         <div className="absolute -inset-1 bg-orange-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           // SỬA LỖI: Nếu src rỗng thì dùng DEFAULT_COVER để tránh download whole page
           src={data.cover_url || DEFAULT_COVER}
@@ -51,7 +54,7 @@ export const BookCard = ({ data, savedHistory,
               {data.description_vi || "Chưa có mô tả cho truyện này."}
             </p>
             
-            {data.description_vi?.length > 100 && (
+            {data.description_vi && data.description_vi.length > 100 && (
               <button 
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="text-[8px] md:text-[9px] text-orange-500/70 hover:text-orange-500 font-bold uppercase mt-1 tracking-tighter"

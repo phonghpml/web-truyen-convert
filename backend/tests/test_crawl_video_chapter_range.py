@@ -13,3 +13,5 @@ def test_build_chapter_range_for_two_chapters():
 def test_build_chapter_range_rejects_invalid_window():
     with pytest.raises(ValueError):
         crawl_routes._build_chapter_range(9, 3, 10)
+
+
