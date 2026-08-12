@@ -7,13 +7,14 @@ import aiohttp
 import edge_tts
 import numpy as np
 from imageio_ffmpeg import get_ffmpeg_exe
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
 
 from tts_engine import NghiTTSEngine
 
 logger = logging.getLogger(__name__)
 
-OUTPUT_VIDEO_WIDTH = 1280
-OUTPUT_VIDEO_HEIGHT = 720
+OUTPUT_VIDEO_WIDTH = 1920
+OUTPUT_VIDEO_HEIGHT = 1080
 MAX_TTS_CHUNK_BYTES = 2800
 MAX_TTS_CONCURRENCY = 3
 MAX_TTS_RETRIES = 3
@@ -407,3 +408,94 @@ async def create_placeholder_image(output_path: Path) -> None:
     result = await asyncio.to_thread(subprocess.run, command, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg placeholder image failed: {result.stderr}")
+
+
+async def compose_image_with_chapter_text(input_image_path: Path, chapter_range_text: str, output_path: Path) -> Path:
+    """Compose a cover on a 16:9 canvas with a blurred background when needed."""
+    if not input_image_path.exists():
+        raise FileNotFoundError(f"Không tìm thấy ảnh đầu vào để tạo ảnh chương: {input_image_path}")
+
+    try:
+        with Image.open(input_image_path) as img:
+            img_rgba = img.convert("RGBA")
+            orig_w, orig_h = img_rgba.size
+            aspect_ratio = orig_w / orig_h
+            target_ratio = OUTPUT_VIDEO_WIDTH / OUTPUT_VIDEO_HEIGHT
+
+            if abs(aspect_ratio - target_ratio) < 0.05:
+                canvas = ImageOps.fit(
+                    img_rgba,
+                    (OUTPUT_VIDEO_WIDTH, OUTPUT_VIDEO_HEIGHT),
+                    method=Image.Resampling.LANCZOS,
+                )
+            else:
+                bg_image = ImageOps.fit(
+                    img_rgba,
+                    (OUTPUT_VIDEO_WIDTH, OUTPUT_VIDEO_HEIGHT),
+                    method=Image.Resampling.LANCZOS,
+                )
+                bg_blurred = bg_image.filter(ImageFilter.GaussianBlur(radius=30))
+                dim_overlay = Image.new("RGBA", bg_blurred.size, (0, 0, 0, 80))
+                bg_blurred = Image.alpha_composite(bg_blurred, dim_overlay)
+
+                scale_factor = OUTPUT_VIDEO_HEIGHT / orig_h
+                new_w = int(orig_w * scale_factor)
+                resized_cover = img_rgba.resize(
+                    (new_w, OUTPUT_VIDEO_HEIGHT),
+                    Image.Resampling.LANCZOS,
+                )
+                offset_x = (OUTPUT_VIDEO_WIDTH - new_w) // 2
+                canvas = bg_blurred
+                canvas.paste(resized_cover, (offset_x, 0), resized_cover)
+
+            font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
+            font_path_fallback = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+            if Path(font_path).exists():
+                font = ImageFont.truetype(font_path, 52)
+            elif Path(font_path_fallback).exists():
+                font = ImageFont.truetype(font_path_fallback, 52)
+            else:
+                font = ImageFont.load_default()
+
+            text = chapter_range_text.strip() or "Chương"
+            dummy_draw = ImageDraw.Draw(canvas)
+            text_x_offset, text_y_offset, text_x_max, text_y_max = dummy_draw.textbbox((0, 0), text, font=font)
+            text_width = text_x_max - text_x_offset
+            text_height = text_y_max - text_y_offset
+
+            padding_x = 28
+            padding_y = 16
+            margin_left = 50
+            margin_bottom = 50
+            panel_width = text_width + padding_x * 2
+            panel_height = text_height + padding_y * 2
+            panel_x1 = margin_left
+            panel_y2 = OUTPUT_VIDEO_HEIGHT - margin_bottom
+            panel_x2 = panel_x1 + panel_width
+            panel_y1 = panel_y2 - panel_height
+
+            overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+            draw_overlay = ImageDraw.Draw(overlay)
+            draw_overlay.rounded_rectangle(
+                [panel_x1, panel_y1, panel_x2, panel_y2],
+                radius=12,
+                fill=(20, 20, 20, 180),
+            )
+            draw_overlay.rounded_rectangle(
+                [panel_x1, panel_y1, panel_x2, panel_y2],
+                radius=12,
+                outline=(255, 255, 255, 220),
+                width=2,
+            )
+
+            text_x = panel_x1 + padding_x - text_x_offset
+            text_y = panel_y1 + padding_y - text_y_offset
+            draw_overlay.text((text_x, text_y), text, font=font, fill=(255, 255, 255, 255))
+
+            final_img = Image.alpha_composite(canvas, overlay).convert("RGB")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            final_img.save(output_path)
+            return output_path
+    except Exception:
+        logger.exception("Không thể compose ảnh với chữ chương | input=%s output=%s", input_image_path.name, output_path.name)
+        raise

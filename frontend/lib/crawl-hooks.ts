@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ENDPOINTS, MESSAGES } from "./constants";
 
 type CrawlJobStatus = "queued" | "running" | "paused" | "completed" | "failed";
@@ -111,44 +111,38 @@ export function useCrawlJobs(pollInterval = 0, refreshTrigger = 0) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadJobs = async () => {
+  const loadJobs = useCallback(async () => {
       try {
-        if (mounted) setLoading(true);
+        setLoading(true);
         const json = await fetchCrawlJobs();
-        if (mounted) {
-          if (json.success && Array.isArray(json.data)) {
-            setJobs(json.data);
-            setError(null);
-          } else {
-            setError(MESSAGES.ERROR);
-          }
+        if (json.success && Array.isArray(json.data)) {
+          setJobs(json.data);
+          setError(null);
+        } else {
+          setError(MESSAGES.ERROR);
         }
       } catch (err) {
         console.error("Crawl jobs load error:", err);
-        if (mounted) setError(MESSAGES.ERROR);
+        setError(MESSAGES.ERROR);
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
-    };
+  }, []);
 
-    loadJobs();
+  useEffect(() => {
+    void loadJobs();
 
     if (!pollInterval) {
       return () => {
-        mounted = false;
       };
     }
 
-    const timer = setInterval(loadJobs, pollInterval);
+    const timer = setInterval(() => void loadJobs(), pollInterval);
 
     return () => {
-      mounted = false;
       clearInterval(timer);
     };
-  }, [pollInterval, refreshTrigger]);
+  }, [loadJobs, pollInterval, refreshTrigger]);
 
-  return { jobs, loading, error };
+  return { jobs, loading, error, reload: loadJobs };
 }

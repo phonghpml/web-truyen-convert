@@ -141,4 +141,5 @@ def build_video_publish_metadata(
         "video_tags": _join_tags(tags),
         "story_title": story_title_range_with_title,
         "actual_title": actual_title_range_with_title,
+        "chapter_range_text": chapter_range_text,
     }

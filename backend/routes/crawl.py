@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,7 +51,8 @@ from services.video_download import download_remote_video
 from services.youtube_uploader import build_oauth_authorization_url, exchange_code_for_tokens, refresh_access_token
 from services.youtube_video_upload import upload_video_to_youtube
 from supabase_storage import upload_video_to_supabase_storage, delete_file_from_supabase_storage
-from video_generator import ensure_output_directories, create_audio_from_text, create_video_from_image_and_audio, create_placeholder_image, ALL_TTS_VOICES, NGHITTS_VOICES, DEFAULT_VOICE, DEFAULT_TTS_RATE
+from video_generator import ensure_output_directories, create_audio_from_text, create_video_from_image_and_audio, create_placeholder_image, compose_image_with_chapter_text, ALL_TTS_VOICES, NGHITTS_VOICES, DEFAULT_VOICE, DEFAULT_TTS_RATE
+from imageio_ffmpeg import get_ffmpeg_exe
 
 router = APIRouter(prefix="/crawl", tags=["crawl"])
 
@@ -340,6 +342,32 @@ def _ensure_video_dirs() -> None:
     VIDEO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     VIDEO_INPUT_DIR.mkdir(parents=True, exist_ok=True)
     VIDEO_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def _create_video_thumbnail(video_path: Path, thumbnail_path: Path) -> Path:
+    thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        get_ffmpeg_exe(),
+        "-y",
+        "-ss",
+        "0",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        "-q:v",
+        "2",
+        str(thumbnail_path),
+    ]
+    result = await asyncio.to_thread(
+        subprocess.run,
+        command,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not thumbnail_path.exists():
+        raise RuntimeError(f"Không thể tạo thumbnail video: {result.stderr}")
+    return thumbnail_path
 
 
 def _cleanup_generated_video_files(job_id: str, base_dir: Optional[Path] = None) -> None:
@@ -648,7 +676,28 @@ async def create_crawl_video(
 
     book = await db_mod.client.book.find_unique(where={"source_url": normalized_book_url})
     cover_url = getattr(book, "cover_url", None) if book else None
+    book_title = getattr(book, "title_vi", None) or "Video truyện"
+    author_name = getattr(book, "author_vi", None)
+    cover_url = getattr(book, "cover_url", None) if book else None
+
+    publish_metadata = build_video_publish_metadata(
+        book_title=book_title,
+        author_name=author_name,
+        chapter_start=chapter_start,
+        chapter_count=chapter_count,
+        story_chapter_start=chapter_start,
+        story_chapter_end=chapter_start + chapter_count - 1,
+        actual_chapter_start=actual_chapter_start,
+        actual_chapter_end=actual_chapter_end,
+    )
+
+    chapter_range_text = publish_metadata.get("chapter_range_text") or (
+        f"Chương {chapter_start}" if chapter_count == 1 else f"Chương {chapter_start} đến {chapter_start + chapter_count - 1}"
+    )
+
     image_path = await _build_video_image_path(cover_image, cover_image_url or cover_url, job_id)
+    composed_image_path = VIDEO_INPUT_DIR / f"{job_id}_{uuid4().hex}{image_path.suffix}"
+    image_path = await compose_image_with_chapter_text(image_path, chapter_range_text, composed_image_path)
 
     suffix = ".wav" if voice in NGHITTS_VOICES else ".mp3"
     audio_path = VIDEO_AUDIO_DIR / f"{job_id}_{uuid4().hex}{suffix}"
@@ -695,23 +744,17 @@ async def create_crawl_video(
             f"videos/{output_path.name}",
             fallback_video_url,
         )
+        thumbnail_path = VIDEO_BASE_DIR / "video-thumbnails" / f"{output_path.stem}.jpg"
+        try:
+            await _create_video_thumbnail(output_path, thumbnail_path)
+            thumbnail_url = f"{base_url}/static/video-thumbnails/{thumbnail_path.name}"
+        except Exception:
+            logger.exception("Không thể tạo thumbnail video | job_id=%s output=%s", job_id, output_path.name)
+            thumbnail_url = cover_image_url or cover_url
+            if not thumbnail_url and image_path:
+                thumbnail_url = f"{base_url}/static/videos/inputs/{image_path.name}"
         _cleanup_uploaded_assets(job_id, video_url, fallback_video_url)
         book_id = getattr(book, "id", None) if book else None
-        book_title = getattr(book, "title_vi", None) or "Video truyện"
-        author_name = getattr(book, "author_vi", None)
-        cover_url = getattr(book, "cover_url", None) if book else None
-        thumbnail_url = cover_image_url or cover_url
-        if not thumbnail_url and image_path:
-            thumbnail_url = f"{base_url}/static/videos/inputs/{image_path.name}"
-
-        publish_metadata = build_video_publish_metadata(
-            book_title=book_title,
-            author_name=author_name,
-            story_chapter_start=chapter_start,
-            story_chapter_end=chapter_start + chapter_count - 1,
-            actual_chapter_start=actual_chapter_start,
-            actual_chapter_end=actual_chapter_end,
-        )
 
         _set_video_progress(job_id, "save_metadata", "Đang lưu metadata và kết nối video", output_path.name)
         save_started = perf_counter()

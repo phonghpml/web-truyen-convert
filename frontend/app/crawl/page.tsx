@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { InputGroup } from "@/components/ui/InputGroup";
 import { CrawlJobList } from "@/components/features/CrawlJobList";
+import { CrawlVideoList } from "@/components/features/CrawlVideoList";
 import { submitCrawlJob, pauseCrawlJob, resumeCrawlJob, deleteCrawlJob, createCrawlVideo, cancelCrawlVideo, fetchCrawlVideoProgress, useCrawlJobs, VIDEO_VOICES } from "@/lib/crawl-hooks";
 import { deleteVideo, fetchBookVideos, publishVideoToYouTube } from "@/lib/hooks";
 import type { Video } from "@/lib/types";
@@ -25,15 +26,39 @@ export default function CrawlPage() {
   const [videoProgress, setVideoProgress] = useState<{ step: string; message: string; detail?: string } | null>(null);
   const [videoVoice, setVideoVoice] = useState<string>(VIDEO_VOICES[0].value);
   const [videoRate, setVideoRate] = useState<string>("+0%");
-  const [refreshTick, setRefreshTick] = useState(0);
-  const { jobs, loading, error } = useCrawlJobs(0, refreshTick);
+  const { jobs, loading, error, reload: reloadJobs } = useCrawlJobs();
   const [activeTab, setActiveTab] = useState<"jobs" | "videos">("jobs");
   const [videos, setVideos] = useState<Video[]>([]);
   const [videosLoading, setVideosLoading] = useState(false);
   const [videosError, setVideosError] = useState<string | null>(null);
   const [videosSuccess, setVideosSuccess] = useState<string | null>(null);
+  const [videoSearch, setVideoSearch] = useState("");
+  const [videoPage, setVideoPage] = useState(1);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
+  const [bulkVideoLoading, setBulkVideoLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [videoAbortController, setVideoAbortController] = useState<AbortController | null>(null);
+  const [jobSearch, setJobSearch] = useState("");
+  const [jobStatusFilter, setJobStatusFilter] = useState("all");
+  const [jobPage, setJobPage] = useState(1);
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [bulkJobLoading, setBulkJobLoading] = useState(false);
+  const [jobNotice, setJobNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const JOBS_PER_PAGE = 10;
+
+  const filteredJobs = jobs.filter((job) => {
+    const query = jobSearch.trim().toLowerCase();
+    const matchesQuery = !query || [job.title_vi, job.author_vi, job.book_url].some((value) => value?.toLowerCase().includes(query));
+    return matchesQuery && (jobStatusFilter === "all" || job.status === jobStatusFilter);
+  });
+  const totalJobPages = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PER_PAGE));
+  const visibleJobs = filteredJobs.slice((jobPage - 1) * JOBS_PER_PAGE, jobPage * JOBS_PER_PAGE);
+  const filteredVideos = videos.filter((video) => {
+    const query = videoSearch.trim().toLowerCase();
+    return !query || [video.video_title, video.book_title, video.book_url, video.video_description].some((value) => value?.toLowerCase().includes(query));
+  });
+  const totalVideoPages = Math.max(1, Math.ceil(filteredVideos.length / JOBS_PER_PAGE));
+  const visibleVideos = filteredVideos.slice((videoPage - 1) * JOBS_PER_PAGE, videoPage * JOBS_PER_PAGE);
 
   const handleSubmit = async () => {
     if (!url.trim()) {
@@ -61,27 +86,90 @@ export default function CrawlPage() {
 
   const handlePause = async (jobId: string) => {
     try {
-      await pauseCrawlJob(jobId);
+      const result = await pauseCrawlJob(jobId);
+      if (!result.success) {
+        setJobNotice({ type: "error", message: result.message || "Không thể tạm dừng job." });
+        return;
+      }
+      await reloadJobs();
     } catch (err) {
       console.error(err);
+      setJobNotice({ type: "error", message: "Không thể tạm dừng job." });
     }
   };
 
   const handleResume = async (jobId: string) => {
     try {
-      await resumeCrawlJob(jobId);
+      const result = await resumeCrawlJob(jobId);
+      if (!result.success) {
+        setJobNotice({ type: "error", message: result.message || "Không thể tiếp tục job." });
+        return;
+      }
+      await reloadJobs();
     } catch (err) {
       console.error(err);
+      setJobNotice({ type: "error", message: "Không thể tiếp tục job." });
     }
   };
 
   const handleDelete = async (jobId: string) => {
+    if (!window.confirm("Bạn có chắc muốn xóa job này không?")) return;
     try {
-      await deleteCrawlJob(jobId);
+      const result = await deleteCrawlJob(jobId);
+      if (result.success) {
+        setJobNotice({ type: "success", message: "Đã xóa job." });
+        setSelectedJobIds((current) => current.filter((id) => id !== jobId));
+        await reloadJobs();
+      } else {
+        setJobNotice({ type: "error", message: result.message || "Xóa job không thành công." });
+      }
     } catch (err) {
       console.error(err);
+      setJobNotice({ type: "error", message: "Không thể xóa job." });
     }
   };
+
+  const toggleJobSelection = (jobId: string) => {
+    setSelectedJobIds((current) => current.includes(jobId) ? current.filter((id) => id !== jobId) : [...current, jobId]);
+  };
+
+  const toggleAllVisibleJobs = () => {
+    const visibleIds = visibleJobs.map((job) => job.job_id);
+    setSelectedJobIds((current) => visibleIds.every((id) => current.includes(id))
+      ? current.filter((id) => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const runBulkJobAction = async (action: "pause" | "resume" | "delete") => {
+    const selectedJobs = jobs.filter((job) => selectedJobIds.includes(job.job_id));
+    const eligibleJobs = selectedJobs.filter((job) => action === "pause"
+      ? job.status === "queued" || job.status === "running"
+      : action === "resume" ? job.status === "paused" || job.status === "failed" : true);
+    if (!eligibleJobs.length) return;
+    const actionLabel = action === "delete" ? "xóa" : action === "pause" ? "tạm dừng" : "tiếp tục";
+    if (!window.confirm(`Bạn có chắc muốn ${actionLabel} ${eligibleJobs.length} job đã chọn?`)) return;
+    setBulkJobLoading(true);
+    try {
+      const results = await Promise.allSettled(eligibleJobs.map((job) => action === "delete" ? deleteCrawlJob(job.job_id) : action === "pause" ? pauseCrawlJob(job.job_id) : resumeCrawlJob(job.job_id)));
+      if (action === "delete") {
+        const failures = results.filter((result) => result.status === "rejected" || (result.status === "fulfilled" && !result.value.success)).length;
+        setJobNotice(failures ? { type: "error", message: `${failures}/${eligibleJobs.length} job xóa không thành công.` } : { type: "success", message: `Đã xóa ${eligibleJobs.length} job.` });
+      }
+      setSelectedJobIds([]);
+      await reloadJobs();
+    } finally {
+      setBulkJobLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setJobPage(1);
+  }, [jobSearch, jobStatusFilter]);
+
+  useEffect(() => {
+    setJobPage((page) => Math.min(page, totalJobPages));
+    setSelectedJobIds((current) => current.filter((id) => jobs.some((job) => job.job_id === id)));
+  }, [jobs, totalJobPages]);
 
   const handleCreateVideo = async (jobId: string) => {
     setVideoJobId(jobId);
@@ -251,18 +339,94 @@ export default function CrawlPage() {
   };
 
   const handleDeleteVideo = async (videoId: string) => {
+    if (!window.confirm("Bạn có chắc muốn xóa video này không?")) return;
     setVideosError(null);
     setVideosSuccess(null);
 
-    const result = await deleteVideo(videoId);
-    if (result.success) {
-      await loadVideosForJobs();
-      setVideosError(null);
-      setVideosSuccess(null);
-    } else {
-      setVideosError(result.error || "Lỗi khi xóa video");
+    try {
+      const result = await deleteVideo(videoId);
+      if (result.success) {
+        await loadVideosForJobs();
+        setVideosSuccess("Đã xóa video.");
+      } else {
+        setVideosError(result.error || "Lỗi khi xóa video");
+      }
+    } catch (err) {
+      console.error(err);
+      setVideosError("Lỗi khi xóa video");
     }
   };
+
+  const getVideoId = (video: Video) => video.id ?? video.video_url;
+
+  const toggleVideoSelection = (videoId: string) => {
+    setSelectedVideoIds((current) => current.includes(videoId) ? current.filter((id) => id !== videoId) : [...current, videoId]);
+  };
+
+  const toggleAllVisibleVideos = () => {
+    const visibleIds = visibleVideos.map(getVideoId);
+    setSelectedVideoIds((current) => visibleIds.every((id) => current.includes(id))
+      ? current.filter((id) => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const handleBulkDeleteVideos = async () => {
+    if (!selectedVideoIds.length || !window.confirm(`Bạn có chắc muốn xóa ${selectedVideoIds.length} video đã chọn?`)) return;
+    setBulkVideoLoading(true);
+    const results = await Promise.allSettled(selectedVideoIds.map((videoId) => deleteVideo(videoId)));
+    const failures = results.filter((result) => result.status === "rejected" || (result.status === "fulfilled" && !result.value.success)).length;
+    setSelectedVideoIds([]);
+    await loadVideosForJobs();
+    setBulkVideoLoading(false);
+    setVideosError(failures ? `${failures} video xóa không thành công.` : null);
+    setVideosSuccess(failures ? null : `Đã xóa ${selectedVideoIds.length} video.`);
+  };
+
+  const handleBulkPublishVideos = async () => {
+    if (!selectedVideoIds.length || !window.confirm(`Bạn có chắc muốn đăng ${selectedVideoIds.length} video lên YouTube?`)) return;
+    setBulkVideoLoading(true);
+    let successCount = 0;
+    let failureCount = 0;
+    for (const videoId of selectedVideoIds) {
+      try {
+        const result = await publishVideoToYouTube(videoId);
+        if (result.success) successCount += 1;
+        else failureCount += 1;
+        if (result.data?.auth_url) window.open(result.data.auth_url, "_blank");
+      } catch {
+        failureCount += 1;
+      }
+    }
+    setSelectedVideoIds([]);
+    await loadVideosForJobs();
+    setBulkVideoLoading(false);
+    setVideosError(failureCount ? `${failureCount} video đăng không thành công.` : null);
+    setVideosSuccess(`Đã xử lý ${successCount}/${successCount + failureCount} video.`);
+  };
+
+  useEffect(() => {
+    setVideoPage(1);
+  }, [videoSearch]);
+
+  useEffect(() => {
+    setVideoPage((page) => Math.min(page, totalVideoPages));
+    setSelectedVideoIds((current) => current.filter((id) => videos.some((video) => getVideoId(video) === id)));
+  }, [videos, totalVideoPages]);
+
+  useEffect(() => {
+    if (!videosError && !videosSuccess) return;
+    const timer = window.setTimeout(() => {
+      setVideosError(null);
+      setVideosSuccess(null);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [videosError, videosSuccess]);
+
+  useEffect(() => {
+    if (!jobNotice) return;
+    const timer = window.setTimeout(() => setJobNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [jobNotice]);
 
   const handlePublishVideo = async (videoId: string, jobId?: string) => {
     setVideosError(null);
@@ -309,7 +473,9 @@ export default function CrawlPage() {
 
     setRefreshing(true);
     try {
-      setRefreshTick((prev) => prev + 1);
+      if (activeTab === "jobs") {
+        await reloadJobs();
+      }
       if (activeTab === "videos") {
         await loadVideosForJobs();
       }
@@ -381,86 +547,58 @@ export default function CrawlPage() {
             error ? (
               <div className="rounded-3xl border border-red-700 bg-red-950/30 p-5 text-red-300">Lỗi tải dữ liệu job crawl.</div>
             ) : (
-              <CrawlJobList jobs={jobs} onPause={handlePause} onResume={handleResume} onDelete={handleDelete} onCreateVideo={handleCreateVideo} />
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-3 rounded-2xl border border-zinc-800 bg-[#101010] p-4">
+                  {jobNotice ? <div className={`w-full rounded-lg border px-3 py-2 text-sm ${jobNotice.type === "error" ? "border-red-700/70 bg-red-950/30 text-red-300" : "border-emerald-500/70 bg-emerald-950/30 text-emerald-200"}`}>{jobNotice.message}</div> : null}
+                  <input value={jobSearch} onChange={(event) => setJobSearch(event.target.value)} placeholder="Tìm theo tên truyện, tác giả hoặc URL" className="min-w-[260px] flex-1 rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500" />
+                  <select value={jobStatusFilter} onChange={(event) => setJobStatusFilter(event.target.value)} className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                    <option value="all">Tất cả trạng thái</option><option value="queued">Đang chờ</option><option value="running">Đang chạy</option><option value="paused">Tạm dừng</option><option value="completed">Hoàn thành</option><option value="failed">Lỗi</option>
+                  </select>
+                </div>
+                <CrawlJobList
+                  jobs={visibleJobs}
+                  totalJobs={filteredJobs.length}
+                  currentPage={jobPage}
+                  totalPages={totalJobPages}
+                  selectedJobIds={selectedJobIds}
+                  onPageChange={setJobPage}
+                  onToggleJob={toggleJobSelection}
+                  onToggleAll={toggleAllVisibleJobs}
+                  onPause={handlePause}
+                  onResume={handleResume}
+                  onDelete={handleDelete}
+                  onCreateVideo={handleCreateVideo}
+                  onBulkPause={() => void runBulkJobAction("pause")}
+                  onBulkResume={() => void runBulkJobAction("resume")}
+                  onBulkDelete={() => void runBulkJobAction("delete")}
+                  bulkLoading={bulkJobLoading}
+                />
+              </div>
             )
           ) : (
             <div>
               {videosLoading ? (
                 <div className="text-sm text-zinc-400">Đang tải video...</div>
-              ) : videosError ? (
-                <div className="rounded-3xl border border-red-700 bg-red-950/30 p-5 text-red-300">{videosError}</div>
-              ) : videosSuccess ? (
-                <div className="rounded-3xl border border-emerald-500 bg-emerald-950/30 p-5 text-emerald-200">{videosSuccess}</div>
-              ) : videos.length === 0 ? (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-sm text-zinc-300">Chưa có video nào được tạo.</div>
               ) : (
                 <div className="space-y-4">
-                  {videos.map((video) => (
-                    <div key={video.id ?? video.video_url} className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-5">
-                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                        <div className="flex gap-4">
-                          {video.thumbnail_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={video.thumbnail_url} alt="Thumbnail video" className="h-24 w-32 rounded-2xl object-cover" />
-                          ) : (
-                            <div className="flex h-24 w-32 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 text-xs uppercase tracking-[0.2em] text-zinc-500">
-                              No Cover
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-sm uppercase tracking-[0.2em] text-zinc-400">Video</p>
-                            <div className="mt-4">
-                              {video.video_title ? (
-                                <p className="text-lg font-semibold text-white">{video.video_title}</p>
-                              ) : (
-                                <p className="text-lg font-semibold text-white">{video.book_title || "Video"}</p>
-                              )}
-                              {video.author_name ? (
-                                <p className="text-sm text-zinc-400">Tác giả: {video.author_name}</p>
-                              ) : null}
-                              {video.video_description ? (
-                                <p className="mt-2 text-sm text-zinc-300">{video.video_description}</p>
-                              ) : null}
-                              {video.video_tags ? (
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {video.video_tags.split(",").map((tag) => (
-                                    <span key={tag.trim()} className="rounded-full bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-400">{tag.trim()}</span>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                            <p className="text-xs text-zinc-500">Truyện: {video.book_url}</p>
-                            <div className="mt-2 flex flex-wrap gap-3 text-xs text-zinc-400">
-                              <span>Giọng: {video.voice}</span>
-                              <span>Rate: {video.rate}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 md:mt-0 md:ml-6 flex flex-col items-start md:items-end gap-3">
-                          <a href={video.video_url} target="_blank" rel="noreferrer" className="text-orange-400 underline">Xem</a>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void handlePublishVideo(video.id ?? video.video_url)}
-                              className="rounded-full border border-orange-500 px-3 py-1 text-sm text-orange-300 hover:bg-orange-950/40"
-                            >
-                              Đăng YouTube
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteVideo(video.id ?? video.video_url)}
-                              className="rounded-full border border-red-700 px-3 py-1 text-sm text-red-400 hover:bg-red-950/40"
-                            >
-                              Xóa
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-
-                    </div>
-                  ))}
+                  {videosError ? <div className="rounded-lg border border-red-700/70 bg-red-950/30 px-3 py-2 text-sm text-red-300">{videosError}</div> : null}
+                  {videosSuccess ? <div className="rounded-lg border border-emerald-500/70 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">{videosSuccess}</div> : null}
+                  <input value={videoSearch} onChange={(event) => setVideoSearch(event.target.value)} placeholder="Tìm theo tên video, truyện hoặc URL" className="w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500" />
+                  <CrawlVideoList
+                    videos={visibleVideos}
+                    totalVideos={filteredVideos.length}
+                    currentPage={videoPage}
+                    totalPages={totalVideoPages}
+                    selectedVideoIds={selectedVideoIds}
+                    onPageChange={setVideoPage}
+                    onToggleVideo={toggleVideoSelection}
+                    onToggleAll={toggleAllVisibleVideos}
+                    onPublish={(videoId) => void handlePublishVideo(videoId)}
+                    onDelete={(videoId) => void handleDeleteVideo(videoId)}
+                    onBulkPublish={() => void handleBulkPublishVideos()}
+                    onBulkDelete={() => void handleBulkDeleteVideos()}
+                    bulkLoading={bulkVideoLoading}
+                  />
                 </div>
               )}
             </div>

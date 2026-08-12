@@ -10,3 +10,4 @@ backend/static/
 backend/static/videos/
 backend/static/videos/inputs/
 backend/static/videos/audio/
+backend/youtube_tokens.json
