@@ -172,3 +172,17 @@ model UserLibrary {
   @@index([userEmail])
   @@index([book_url])
 }
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique @db.Text
+  userEmail String
+  revoked   Boolean  @default(false)
+  expires_at DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@index([userEmail])
+}

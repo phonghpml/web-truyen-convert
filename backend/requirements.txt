@@ -16,3 +16,4 @@ onnxruntime
 phonemizer
 vietnormalizer
 pillow
+PyJWT
