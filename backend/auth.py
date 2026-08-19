@@ -7,6 +7,8 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import bcrypt
 
+import database as db_mod
+
 SECRET_KEY = os.getenv("APP_SECRET") or os.getenv("DATABASE_URL") or "development-secret"
 security = HTTPBearer()
 
@@ -70,3 +72,17 @@ async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Dep
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization header missing or invalid")
     return verify_access_token(credentials.credentials)
+
+
+async def get_current_user(current_email: str = Depends(get_current_user_email)):
+    user = await db_mod.client.user.find_unique(where={"email": current_email})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User không tồn tại")
+    return user
+
+
+async def get_current_admin_user(user=Depends(get_current_user)):
+    role = user.role if not isinstance(user, dict) else user.get("role")
+    if role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Quyền bị từ chối")
+    return user

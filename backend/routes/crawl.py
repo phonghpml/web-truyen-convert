@@ -36,25 +36,31 @@ def _get_field(row: dict, field: str, default=None):
         return row.get(field, default)
     return getattr(row, field, default)
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+import auth as auth_utils
 import database as db_mod
 import scraper as scr
 from crawl_queue import CrawlChapterItem, CrawlJobData, CrawlJobStatus, CrawlQueueManager, CrawlChapterStatus
 from crawl_worker import crawl_job_worker
 from services.crawl_service import submit_crawl as service_submit_crawl
 from services.video_metadata import build_video_publish_metadata
-from services.youtube_token_store import get_refresh_token, save_refresh_token
-from services.video_download import download_remote_video
-from services.youtube_uploader import build_oauth_authorization_url, exchange_code_for_tokens, refresh_access_token
-from services.youtube_video_upload import upload_video_to_youtube
-from supabase_storage import upload_video_to_supabase_storage, delete_file_from_supabase_storage
+from services.youtube_token_store import save_refresh_token
+from services.youtube_uploader import exchange_code_for_tokens
+from supabase_storage import upload_video_to_supabase_storage
 from video_generator import ensure_output_directories, create_audio_from_text, create_video_from_image_and_audio, create_placeholder_image, compose_image_with_chapter_text, ALL_TTS_VOICES, NGHITTS_VOICES, DEFAULT_VOICE, DEFAULT_TTS_RATE
 from imageio_ffmpeg import get_ffmpeg_exe
 
-router = APIRouter(prefix="/crawl", tags=["crawl"])
+router = APIRouter(
+    prefix="/crawl",
+    tags=["crawl"],
+    dependencies=[Depends(auth_utils.get_current_admin_user)],
+)
+
+# OAuth callback router (no admin dependency) - Google will call this without Authorization header
+oauth_router = APIRouter(prefix="/crawl", tags=["crawl-oauth"])
 
 queue_manager = CrawlQueueManager()
 _background_tasks: Dict[str, asyncio.Task] = {}
@@ -92,6 +98,7 @@ class CrawlSubmitRequest(BaseModel):
 class CrawlJobSummary(BaseModel):
     job_id: str
     book_url: str
+    book_id: Optional[str]
     title_vi: Optional[str]
     author_vi: Optional[str]
     description_vi: Optional[str]
@@ -254,6 +261,7 @@ async def _job_to_payload(job: CrawlJobData, db_chapter_count: int | None = None
     payload = {
         "job_id": job.job_id,
         "book_url": job.book_url,
+        "book_id": getattr(job, "book_id", None),
         "title_vi": book_title,
         "author_vi": author_vi,
         "description_vi": description_vi,
@@ -453,6 +461,7 @@ def _job_to_db_dict(job: CrawlJobData) -> dict:
         "current_chapter_url": job.current_chapter_url,
         "createdAt": job.created_at,
         "updatedAt": job.updated_at,
+        "bookId": job.book_id,
     }
 
 
@@ -477,6 +486,7 @@ def _row_to_job(row: dict) -> CrawlJobData:
         current_chapter_index=getattr(row, "current_chapter_index", 0),
         current_chapter_title=getattr(row, "current_chapter_title", None),
         current_chapter_url=getattr(row, "current_chapter_url", None),
+        book_id=getattr(row, "bookId", None) or getattr(row, "book_id", None),
         chapters=[],
     )
 
@@ -495,7 +505,7 @@ async def _load_job_into_memory(job_id: str) -> Optional[CrawlJobData]:
     if existing:
         return existing
 
-    row = await db_mod.get_crawl_job_by_job_id(job_id)
+    row = await db_mod.get_crawl_job_by_id(job_id)
     if not row:
         return None
 
@@ -576,59 +586,30 @@ async def create_crawl_video(
     voice: str = Form(DEFAULT_VOICE),
     rate: str = Form(DEFAULT_TTS_RATE),
 ):
+    # Wrap existing job-based create into service-backed create_video_from_source_url
     job = queue_manager.get_job(job_id) or await _load_job_into_memory(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job không tìm thấy")
 
-    started_at = perf_counter()
-    _set_video_progress(job_id, "start", "Bắt đầu chuẩn bị tạo video", f"chapter_start={chapter_start} chapter_count={chapter_count}")
-    logger.info(
-        "Bắt đầu tạo video | job_id=%s chapter_start=%s chapter_count=%s started_at=%s",
-        job_id,
-        chapter_start,
-        chapter_count,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
-    )
-
     normalized_book_url = normalize_source_url(job.book_url)
-    story_chapter_count = await db_mod.client.chapter.count(
-        where={"book_source_url": normalized_book_url, "is_story_content": True}
+    # use existing job_id as token so progress/cancel remain compatible
+    cancel_event = __import__("asyncio").Event()
+    VIDEO_CANCEL_TOKENS[job_id] = cancel_event
+    # delegate to shared service
+    from services.video_service import create_video_from_source_url
+
+    return await create_video_from_source_url(
+        request=request,
+        token=job_id,
+        book_url=normalized_book_url,
+        chapter_start=chapter_start,
+        chapter_count=chapter_count,
+        cover_image=cover_image,
+        cover_image_url=cover_image_url,
+        voice=voice,
+        rate=rate,
+        cancel_event=cancel_event,
     )
-    try:
-        chapter_start, last_index = _build_chapter_range(chapter_start, chapter_count, story_chapter_count)
-    except ValueError as exc:
-        _set_video_progress(job_id, "failed", "Dữ liệu chương không hợp lệ", str(exc))
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    _set_video_progress(job_id, "fetch_chapters", "Đang lấy danh sách chương story từ database", f"story {chapter_start}-{last_index}")
-    chapter_fetch_started = perf_counter()
-    try:
-        chapters = await db_mod.client.chapter.find_many(
-            where={
-                "book_source_url": normalized_book_url,
-                "is_story_content": True,
-            },
-            order={"chapter_no": "asc"},
-            skip=chapter_start - 1,
-            take=chapter_count,
-        )
-    except Exception as exc:
-        logger.exception("Lỗi khi lấy danh sách chương để tạo video")
-        raise HTTPException(status_code=504, detail="Không thể đọc dữ liệu chương từ database") from exc
-
-    logger.info(
-        "Đã lấy danh sách chương | job_id=%s chapter_count=%s duration_ms=%.2f at=%s",
-        job_id,
-        len(chapters) if chapters is not None else 0,
-        (perf_counter() - chapter_fetch_started) * 1000,
-        datetime.now().strftime("%H:%M:%S.%f")[:-3],
-    )
-
-    if len(chapters or []) < chapter_count:
-        _set_video_progress(job_id, "failed", "Không tìm thấy chương phù hợp", "Không có đủ chương truyện trong phạm vi đã chọn")
-        raise HTTPException(status_code=400, detail="Không có đủ chương truyện có nội dung để tạo video")
-
-    chapter_slice = chapters
 
     chapter_urls = []
     chapter_nos = []
@@ -870,66 +851,7 @@ async def get_video_progress_route(job_id: str):
     return {"success": True, "data": progress}
 
 
-@router.get("/videos")
-async def list_crawl_videos(book_url: str):
-    normalized_book_url = normalize_source_url(book_url)
-    rows = await db_mod.get_videos_by_book_url(normalized_book_url)
-    videos = [_serialize_video_row(row) for row in rows or []]
-    return {"success": True, "data": videos}
-
-
-@router.delete("/videos/{video_id}")
-async def delete_crawl_video(video_id: str):
-    row = await db_mod.get_video_by_id(video_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Video không tìm thấy")
-
-    if isinstance(row, dict):
-        video_url = row.get("video_url")
-        job_id = row.get("job_id")
-    else:
-        video_url = getattr(row, "video_url", None)
-        job_id = getattr(row, "job_id", None)
-
-    if video_url and video_url.startswith("https://") and "supabase.co" in video_url:
-        try:
-            parts = video_url.split("/storage/v1/object/")
-            if len(parts) > 1:
-                object_path = parts[1].split("?", 1)[0]
-                if object_path.startswith("public/"):
-                    segments = object_path.split("/", 2)
-                    object_name = segments[2] if len(segments) == 3 else object_path
-                else:
-                    segments = object_path.split("/", 1)
-                    object_name = segments[1] if len(segments) > 1 else segments[0]
-
-                await __import__("asyncio").to_thread(delete_file_from_supabase_storage, object_name)
-        except Exception:
-            logger.exception("Failed to delete Supabase object for video %s", video_id)
-
-    try:
-        _cleanup_generated_video_files(job_id or "")
-    except Exception:
-        logger.exception("Failed to cleanup generated files for job %s", job_id)
-
-    deleted = await db_mod.delete_video(video_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Video không tìm thấy")
-    try:
-        if job_id:
-            _set_video_progress(job_id, "deleted", "Đã xóa video", video_id)
-    except Exception:
-        logger.exception("Failed to set VIDEO_PROGRESS for delete | video_id=%s job_id=%s", video_id, job_id)
-    return {"success": True, "message": "Đã xóa video"}
-
-
-@router.get("/videos/{video_id}/youtube-auth")
-async def youtube_auth_start(video_id: str):
-    auth_url = build_oauth_authorization_url(state=video_id)
-    return {"success": True, "data": {"auth_url": auth_url, "video_id": video_id}}
-
-
-@router.get("/youtube/callback", response_class=HTMLResponse)
+@oauth_router.get("/youtube/callback", response_class=HTMLResponse)
 async def youtube_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         raise HTTPException(status_code=400, detail=f"OAuth error: {error}")
@@ -958,92 +880,6 @@ async def youtube_oauth_callback(code: str | None = None, state: str | None = No
 </html>
 """
     return HTMLResponse(content=html, status_code=200)
-
-
-@router.post("/videos/{video_id}/publish-youtube")
-async def publish_video_to_youtube(video_id: str):
-    video_row = await db_mod.get_video_by_id(video_id)
-    if not video_row:
-        raise HTTPException(status_code=404, detail="Video không tìm thấy")
-
-    refresh_token = get_refresh_token()
-    if not refresh_token:
-        return {
-            "success": True,
-            "data": {
-                "message": "Cần xác thực Google để đăng video lên YouTube",
-                "auth_url": build_oauth_authorization_url(state=video_id),
-            },
-        }
-
-    token_response = refresh_access_token(refresh_token)
-    access_token = token_response.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="Không thể lấy access token từ Google")
-    # robustly extract video_url and job_id whether `video_row` is a dict, prisma model, or has camelCase keys
-    video_url = None
-    job_id = None
-    try:
-        if isinstance(video_row, dict):
-            video_url = video_row.get("video_url") or video_row.get("videoUrl")
-            job_id = video_row.get("job_id") or video_row.get("jobId")
-        else:
-            # prisma model may expose attributes or a dict-like interface
-            video_url = getattr(video_row, "video_url", None) or getattr(video_row, "videoUrl", None)
-            job_id = getattr(video_row, "job_id", None) or getattr(video_row, "jobId", None)
-            if not video_url and hasattr(video_row, "__dict__"):
-                vid_dict = getattr(video_row, "__dict__", {})
-                video_url = vid_dict.get("video_url") or vid_dict.get("videoUrl")
-                job_id = job_id or vid_dict.get("job_id") or vid_dict.get("jobId")
-    except Exception:
-        logger.exception("Lỗi khi lấy video_url và job_id từ video_row")
-    if not video_url:
-        raise HTTPException(status_code=400, detail="Video chưa có URL để đăng lên YouTube")
-
-    video_title = getattr(video_row, "video_title", None) or getattr(video_row, "book_title", None) or "Video truyện"
-    video_description = getattr(video_row, "video_description", None) or "Video được tạo tự động"
-    video_tags = getattr(video_row, "video_tags", None) or "truyện, video tự động"
-
-    upload_dir = VIDEO_BASE_DIR / "uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    temp_video_path = upload_dir / f"{video_id}_youtube.mp4"
-
-    try:
-        if isinstance(video_url, str) and video_url.startswith("http"):
-            downloaded_path = await __import__("asyncio").to_thread(download_remote_video, video_url, str(temp_video_path))
-        else:
-            raise HTTPException(status_code=400, detail="Video URL không hợp lệ để tải xuống")
-
-        upload_result = await __import__("asyncio").to_thread(
-            upload_video_to_youtube,
-            access_token,
-            video_title,
-            video_description,
-            video_tags,
-            downloaded_path,
-        )
-
-        youtube_video_id = upload_result.get("id") or upload_result.get("videoId")
-        try:
-            if job_id:
-                _set_video_progress(job_id, "published", "Đã đăng lên YouTube", str(youtube_video_id))
-        except Exception:
-            logger.exception("Failed to set VIDEO_PROGRESS for publish | video_id=%s job_id=%s", video_id, job_id)
-
-        return {
-            "success": True,
-            "data": {
-                "message": "Đã đăng video lên YouTube thành công",
-                "youtube_video_id": youtube_video_id,
-                "youtube_response": upload_result,
-            },
-        }
-    finally:
-        try:
-            if temp_video_path.exists():
-                temp_video_path.unlink(missing_ok=True)
-        except Exception:
-            logger.exception("Không thể xóa file tạm tải video cho YouTube | video_id=%s", video_id)
 
 
 @router.get("/jobs")
@@ -1122,3 +958,20 @@ async def delete_crawl_job(job_id: str):
     queue_manager.remove_job(job_id)
     await db_mod.delete_crawl_job(job_id)
     return {"success": True, "message": "Đã xóa job"}
+
+
+@router.delete("/books/{book_id}")
+async def delete_crawl_book(book_id: str):
+    if not book_id:
+        raise HTTPException(status_code=400, detail="Book ID không được để trống")
+
+    deleted_book = await db_mod.delete_book_and_related(book_id)
+    if not deleted_book:
+        raise HTTPException(status_code=404, detail="Book không tìm thấy")
+
+    # Remove any in-memory crawl job for this book if present
+    for job in list(queue_manager.get_all_jobs()):
+        if getattr(job, "book_id", None) == book_id or job.book_url == getattr(deleted_book, "source_url", None):
+            queue_manager.remove_job(job.job_id)
+
+    return {"success": True, "message": "Đã xóa sách và dữ liệu liên quan"}

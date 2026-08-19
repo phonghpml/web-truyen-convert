@@ -53,6 +53,7 @@ class CrawlJobData:
     current_chapter_index: int = 0
     current_chapter_title: Optional[str] = None
     current_chapter_url: Optional[str] = None
+    book_id: Optional[str] = None
     chapters: List[CrawlChapterItem] = field(default_factory=list)
 
 

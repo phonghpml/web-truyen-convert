@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 from pathlib import Path
 from routes.auth import router as auth_router
 from routes.user import router as user_router
-from routes.crawl import router as crawl_router, restore_jobs_from_db
+from routes.crawl import router as crawl_router, oauth_router, restore_jobs_from_db
+from routes.video import router as video_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,9 +48,9 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "User-Agent", "DNT", "Cache-Control", "X-Mx-ReqToken", "Keep-Alive", "X-Requested-With", "If-Modified-Since", "Accept-Encoding", "Accept-Language"],
 )
 
 @app.get("/")
@@ -58,7 +59,9 @@ async def root():
 
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(oauth_router)
 app.include_router(crawl_router)
+app.include_router(video_router)
 
 class TranslationRequest(BaseModel):
     url: str

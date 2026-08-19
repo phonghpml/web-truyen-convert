@@ -1,6 +1,7 @@
 import { ENDPOINTS } from "./constants";
 import type { AuthUser, ApiResponse, LibraryStatusResponse, ReadingHistory } from "./types";
 
+export const AUTH_CHANGE_EVENT = "web_truyen_auth_change";
 const AUTH_TOKEN_KEY = "web_truyen_auth_token";
 const AUTH_USER_KEY = "web_truyen_auth_user";
 
@@ -18,6 +19,55 @@ export function getAuthToken(): string | null {
   return window.localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
+function base64UrlToBase64(input: string) {
+  return input.replace(/-/g, "+").replace(/_/g, "/") + "==".slice((2 - input.length * 3) & 3);
+}
+
+export function isTokenExpired(token: string | null): boolean {
+  if (!token) return false;
+  if (typeof window === "undefined") return false;
+
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return false;
+    const raw = parts[1];
+
+    // Try interpret as epoch seconds directly
+    const direct = parseInt(raw, 10);
+    if (!Number.isNaN(direct)) {
+      return direct < Math.floor(Date.now() / 1000);
+    }
+
+    // Try decode base64url -> string
+    let decoded = "";
+    try {
+      const b64 = base64UrlToBase64(raw);
+      decoded = atob(b64);
+    } catch {
+      decoded = raw;
+    }
+
+    // If decoded is JSON with exp field
+    try {
+      const obj = JSON.parse(decoded);
+      if (obj && typeof obj.exp === "number") {
+        return obj.exp < Math.floor(Date.now() / 1000);
+      }
+    } catch {
+      // not JSON
+    }
+
+    // fallback: parse decoded as number
+    const n = parseInt(decoded, 10);
+    if (!Number.isNaN(n)) return n < Math.floor(Date.now() / 1000);
+  } catch (err) {
+    // ignore errors
+    return false;
+  }
+
+  return false;
+}
+
 export function getStoredUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
   return safeParse(window.localStorage.getItem(AUTH_USER_KEY));
@@ -29,21 +79,44 @@ export function saveAuth(token: string, user: AuthUser) {
   window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
 }
 
+export function updateStoredUser(user: AuthUser) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+}
+
 export function clearAuth() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(AUTH_TOKEN_KEY);
   window.localStorage.removeItem(AUTH_USER_KEY);
 }
 
-function buildAuthHeaders(initialHeaders?: HeadersInit) {
+export function dispatchAuthChange() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+}
+
+function buildAuthHeaders(initialHeaders?: HeadersInit, body?: BodyInit | null) {
   const headers = new Headers(initialHeaders as HeadersInit);
   const token = getAuthToken();
 
   if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
+    try {
+      if (isTokenExpired(token)) {
+        // clear expired token and notify app
+        if (typeof window !== "undefined") {
+          clearAuth();
+          dispatchAuthChange();
+        }
+      } else {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+    } catch {
+      // on error, do not attach token
+    }
   }
 
-  if (!headers.has("Content-Type")) {
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body != null && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -51,11 +124,26 @@ function buildAuthHeaders(initialHeaders?: HeadersInit) {
 }
 
 export async function authFetch(input: RequestInfo, init: RequestInit = {}) {
-  const headers = buildAuthHeaders(init.headers || {});
-  return fetch(input, {
+  const headers = buildAuthHeaders(init.headers || {}, init.body ?? null);
+  const res = await fetch(input, {
     ...init,
     headers,
   });
+
+  if (res.status === 401 && typeof window !== "undefined") {
+    try {
+      const body = await res.clone().json().catch(() => null);
+      const detail = body && typeof body.detail === "string" ? body.detail.toLowerCase() : "";
+      if (detail.includes("expired")) {
+        clearAuth();
+        dispatchAuthChange();
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return res;
 }
 
 export async function register(email: string, password: string) {

@@ -66,7 +66,7 @@ async def get_crawl_jobs():
     return await client.query_raw('SELECT * FROM "CrawlJob" ORDER BY "updatedAt" DESC')
 
 
-async def get_crawl_job_by_job_id(job_id: str):
+async def get_crawl_job_by_id(job_id: str):
     if not job_id:
         return None
 
@@ -77,3 +77,6 @@ async def get_crawl_job_by_job_id(job_id: str):
         'SELECT * FROM "CrawlJob" WHERE "job_id" = $1 LIMIT 1',
         job_id,
     )
+
+
+

@@ -13,12 +13,12 @@ interface NavbarProps {
 export const Navbar = ({ onHomeClick }: NavbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, isLoading, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const isLoading = false;
+  const isAdmin = !isLoading && user?.role === "admin";
 
-  const displayName = user?.name || user?.email?.split('@')[0] || "Guest";
+  const displayName = !isLoading ? (user?.name || user?.email?.split('@')[0] || "Guest") : "Guest";
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -58,17 +58,42 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
           <Trophy size={13} className={pathname === "/rank" ? "animate-pulse" : ""} />
           <span className="hidden sm:inline">Xếp Hạng</span>
         </Link>
-        <Link
-          href="/crawl"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all ${
-            pathname === "/crawl"
-              ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-          }`}
-        >
-          <Download size={13} className={pathname === "/crawl" ? "animate-pulse" : ""} />
-          <span className="hidden sm:inline">Cào Truyện</span>
-        </Link>
+        {isAdmin && (
+          <div className="hidden md:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-orange-400">Admin</span>
+            <Link
+              href="/crawl"
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tight transition-all ${
+                pathname === "/crawl"
+                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-900"
+              }`}
+            >
+              <Download size={12} className={pathname === "/crawl" ? "animate-pulse" : ""} />
+              <span className="hidden lg:inline">Cào Truyện</span>
+            </Link>
+            <Link
+              href="/admin/books"
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tight transition-all ${
+                pathname.startsWith("/admin/books")
+                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-900"
+              }`}
+            >
+              <span className="hidden lg:inline">Quản lý sách</span>
+            </Link>
+            <Link
+              href="/admin/videos"
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tight transition-all ${
+                pathname === "/admin/videos"
+                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-900"
+              }`}
+            >
+              <span className="hidden lg:inline">Quản lý video</span>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* 2. KHỐI USER & MODAL LIST */}

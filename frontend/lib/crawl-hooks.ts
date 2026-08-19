@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ENDPOINTS, MESSAGES } from "./constants";
+import { authFetch } from "./auth";
 
 type CrawlJobStatus = "queued" | "running" | "paused" | "completed" | "failed";
 
@@ -35,35 +36,34 @@ export interface CrawlJob {
 }
 
 export async function submitCrawlJob(url: string) {
-  const response = await fetch(ENDPOINTS.CRAWL_SUBMIT, {
+  const response = await authFetch(ENDPOINTS.CRAWL_SUBMIT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
   });
   return await response.json();
 }
 
 export async function fetchCrawlJobs() {
-  const response = await fetch(ENDPOINTS.CRAWL_JOBS);
+  const response = await authFetch(ENDPOINTS.CRAWL_JOBS, { method: "GET" });
   return await response.json();
 }
 
 export async function pauseCrawlJob(jobId: string) {
-  const response = await fetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/pause`, {
+  const response = await authFetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/pause`, {
     method: "POST",
   });
   return await response.json();
 }
 
 export async function resumeCrawlJob(jobId: string) {
-  const response = await fetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/resume`, {
+  const response = await authFetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/resume`, {
     method: "POST",
   });
   return await response.json();
 }
 
 export async function deleteCrawlJob(jobId: string) {
-  const response = await fetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}`, {
+  const response = await authFetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}`, {
     method: "DELETE",
   });
   return await response.json();
@@ -86,7 +86,7 @@ export async function createCrawlVideo(jobId: string, chapterStart: number, chap
     form.append("cover_image", coverImage);
   }
 
-  const response = await fetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/video`, {
+  const response = await authFetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/video`, {
     method: "POST",
     body: form,
     signal,
@@ -95,14 +95,16 @@ export async function createCrawlVideo(jobId: string, chapterStart: number, chap
 }
 
 export async function cancelCrawlVideo(jobId: string) {
-  const response = await fetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/video/cancel`, {
+  const response = await authFetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/video/cancel`, {
     method: "POST",
   });
   return await response.json();
 }
 
 export async function fetchCrawlVideoProgress(jobId: string) {
-  const response = await fetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/video/progress`);
+  const response = await authFetch(`${ENDPOINTS.CRAWL_JOBS}/${encodeURIComponent(jobId)}/video/progress`, {
+    method: "GET",
+  });
   return await response.json();
 }
 

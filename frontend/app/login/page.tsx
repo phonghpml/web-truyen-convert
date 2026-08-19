@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, saveAuth } from "@/lib/auth";
+import { login, saveAuth, fetchMe, dispatchAuthChange } from "@/lib/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -38,6 +38,19 @@ export default function Login() {
       }
 
       saveAuth(res.data.token, res.data.user);
+      try {
+        const meRes = await fetchMe();
+        if (meRes?.success && meRes.data) {
+          saveAuth(res.data.token, {
+            email: meRes.data.email,
+            name: meRes.data.name,
+            role: meRes.data.role,
+          });
+        }
+      } catch (err) {
+        console.warn("Không thể tải thông tin user sau login", err);
+      }
+      dispatchAuthChange();
       setFeedback({ type: 'success', message: 'Đăng nhập thành công!' });
       setTimeout(() => router.push("/"), 500);
     } catch {

@@ -47,6 +47,7 @@ model User {
   email         String    @unique
   password_hash String?
   name          String?
+  role          String    @default("user")
   emailVerified DateTime?
   image         String?
   createdAt     DateTime  @default(now())
@@ -74,7 +75,7 @@ model Book {
   updatedAt      DateTime @updatedAt
 
   chapters  Chapter[]
-  crawlJobs CrawlJob[]
+  crawlJob  CrawlJob?
   videos    Video[]
 }
 
@@ -101,12 +102,8 @@ model Chapter {
 model CrawlJob {
   id                    String   @id @default(cuid())
   job_id                String   @unique
-  book_url              String   @unique
+  book_url              String
   status                String
-  title_vi              String?
-  author_vi             String?
-  description_vi        String?
-  cover_url             String?
   total_chapters        Int      @default(0)
   crawled_chapters      Int      @default(0)
   current_chapter_index Int      @default(0)
@@ -114,8 +111,8 @@ model CrawlJob {
   current_chapter_url   String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-  Book                  Book?    @relation(fields: [bookId], references: [id])
-  bookId                String?
+  Book                  Book     @relation(fields: [bookId], references: [id])
+  bookId                String   @unique
 
   @@index([book_url])
 }

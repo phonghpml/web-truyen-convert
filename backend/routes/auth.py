@@ -100,6 +100,7 @@ async def login(request: AuthRequest):
             "user": {
                 "email": _get_user_value(user, "email", ""),
                 "name": _get_user_value(user, "name") or "",
+                "role": _get_user_value(user, "role", "user"),
             },
         },
     }
@@ -116,5 +117,6 @@ async def me(current_email: str = Depends(auth_utils.get_current_user_email)):
         "data": {
             "email": _get_user_value(user, "email", ""),
             "name": _get_user_value(user, "name") or "",
+            "role": _get_user_value(user, "role", "user"),
         },
     }

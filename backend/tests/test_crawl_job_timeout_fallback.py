@@ -28,6 +28,7 @@ async def test_persist_crawl_job_swallows_db_errors(monkeypatch):
         current_chapter_index=0,
         current_chapter_title=None,
         current_chapter_url=None,
+        book_id=None,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )

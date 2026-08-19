@@ -1,5 +1,5 @@
 // Environment constants
-export const CRAWLER_BASE_URL = process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000";
+export const CRAWLER_BASE_URL = (process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 // API Endpoints
 export const ENDPOINTS = {
@@ -10,7 +10,8 @@ export const ENDPOINTS = {
   CRAWLER_CHAPTERS: `${CRAWLER_BASE_URL}/get-chapters`,
   CRAWL_SUBMIT: `${CRAWLER_BASE_URL}/crawl/submit`,
   CRAWL_JOBS: `${CRAWLER_BASE_URL}/crawl/jobs`,
-  CRAWL_VIDEOS: `${CRAWLER_BASE_URL}/crawl/videos`,
+  CRAWL_BOOKS: `${CRAWLER_BASE_URL}/crawl/books`,
+  VIDEOS: `${CRAWLER_BASE_URL}/videos`,
   AUTH_REGISTER: `${CRAWLER_BASE_URL}/auth/register`,
   AUTH_LOGIN: `${CRAWLER_BASE_URL}/auth/login`,
   AUTH_ME: `${CRAWLER_BASE_URL}/auth/me`,

@@ -1,18 +1,6 @@
-import shutil
 from pathlib import Path
 
 import requests
-
-
-def download_video_for_upload(video_path: str, destination_path: str) -> str:
-    source = Path(video_path)
-    destination = Path(destination_path)
-    if not source.exists():
-        raise FileNotFoundError(f"Video file not found: {video_path}")
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
-    return str(destination.resolve())
 
 
 def download_remote_video(video_url: str, destination_path: str) -> str:

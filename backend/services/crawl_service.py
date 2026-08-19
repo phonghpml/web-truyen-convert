@@ -59,6 +59,7 @@ def _crawl_job_to_db_dict(job: CrawlJobData) -> dict:
         "current_chapter_url": job.current_chapter_url,
         "createdAt": job.created_at,
         "updatedAt": job.updated_at,
+        "bookId": getattr(job, "book_id", None),
     }
 
 
@@ -217,12 +218,13 @@ async def submit_crawl(raw_url: str, queue_manager: CrawlQueueManager):
         description_vi=book_info.get("description_vi"),
         cover_url=book_info.get("cover_url", ""),
     )
-    await db_mod.save_book(book_data)
+    book = await db_mod.save_book(book_data)
 
     chapters = [_build_chapter_data(raw, index) for index, raw in enumerate(raw_chapters, start=1)]
 
     await db_mod.save_chapters(normalized_url, chapters, replace_existing=True)
 
     job = queue_manager.add_job(normalized_url)
+    job.book_id = getattr(book, "id", None) if book is not None else None
     await persist_crawl_job(job)
     return job

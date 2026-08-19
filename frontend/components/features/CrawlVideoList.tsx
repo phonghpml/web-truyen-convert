@@ -16,6 +16,11 @@ interface CrawlVideoListProps {
   onDelete: (videoId: string) => void;
   onBulkPublish: () => void;
   onBulkDelete: () => void;
+  order?: string;
+  onOrderChange?: (order: string) => void;
+  onCreate?: () => void;
+  onRefresh: () => void;
+  videosLoading: boolean;
   bulkLoading: boolean;
 }
 
@@ -29,17 +34,28 @@ function formatDate(value?: string) {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("vi-VN");
 }
 
-export function CrawlVideoList({ videos, totalVideos, currentPage, totalPages, selectedVideoIds, onPageChange, onToggleVideo, onToggleAll, onPublish, onDelete, onBulkPublish, onBulkDelete, bulkLoading }: CrawlVideoListProps) {
+export function CrawlVideoList({ videos, totalVideos, currentPage, totalPages, selectedVideoIds, onPageChange, onToggleVideo, onToggleAll, onPublish, onDelete, onBulkPublish, onBulkDelete, order, onOrderChange, onCreate, onRefresh, videosLoading, bulkLoading }: CrawlVideoListProps) {
   const selectedCount = selectedVideoIds.length;
   const allSelected = videos.length > 0 && videos.every((video) => selectedVideoIds.includes(videoId(video)));
-
-  if (!totalVideos) return <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 text-sm text-zinc-300">Chưa có video nào được tạo.</div>;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-[#101010] px-4 py-3">
-        <span className="text-sm text-zinc-400">{selectedCount} video đã chọn / {totalVideos}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-zinc-400">{selectedCount} video đã chọn / {totalVideos}</span>
+          <label className="text-xs text-zinc-400">Sắp xếp</label>
+          <select value={order || "created_desc"} onChange={(e) => onOrderChange?.(e.target.value)} className="rounded-md bg-black border border-zinc-700 text-xs text-white px-2 py-1">
+            <option value="created_asc">Tạo sớm → muộn</option>
+            <option value="created_desc">Tạo muộn → sớm</option>
+            <option value="chapters_asc">Chương nhỏ → lớn</option>
+            <option value="chapters_desc">Chương lớn → nhỏ</option>
+          </select>
+        </div>
         <div className="flex flex-wrap gap-2">
+          {onCreate ? (
+            <button type="button" onClick={onCreate} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-950/30">Tạo mới</button>
+          ) : null}
+          <button type="button" onClick={onRefresh} disabled={videosLoading} className="inline-flex items-center gap-2 rounded-lg border border-zinc-600 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-950/30 disabled:cursor-not-allowed disabled:opacity-40">Làm mới</button>
           <button type="button" onClick={onBulkPublish} disabled={!selectedCount || bulkLoading} className="inline-flex items-center gap-2 rounded-lg border border-orange-500 px-3 py-2 text-xs text-orange-300 hover:bg-orange-950/30 disabled:cursor-not-allowed disabled:opacity-40"><Youtube size={14} /> Đăng YouTube</button>
           <button type="button" onClick={onBulkDelete} disabled={!selectedCount || bulkLoading} className="inline-flex items-center gap-2 rounded-lg border border-red-700 px-3 py-2 text-xs text-red-300 hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={14} /> Xóa đã chọn</button>
         </div>

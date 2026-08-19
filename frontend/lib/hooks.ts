@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { authFetch } from "./auth";
 import { Book, Chapter, Video, ApiResponse } from "./types";
 import { ENDPOINTS, MESSAGES } from "./constants";
 
@@ -145,7 +146,7 @@ export async function fetchBookVideos(
 ): Promise<{ videos: Video[]; error: string | null }> {
   try {
     const response = await fetch(
-      `${ENDPOINTS.CRAWL_VIDEOS}?book_url=${encodeURIComponent(sourceUrl)}`
+      `${ENDPOINTS.VIDEOS}?book_url=${encodeURIComponent(sourceUrl)}`
     );
     const data: ApiResponse<Video[]> = await response.json();
 
@@ -162,7 +163,7 @@ export async function fetchBookVideos(
 
 export async function deleteVideo(videoId: string) {
   try {
-    const response = await fetch(`${ENDPOINTS.CRAWL_VIDEOS}/${encodeURIComponent(videoId)}`, {
+    const response = await authFetch(`${ENDPOINTS.VIDEOS}/${encodeURIComponent(videoId)}`, {
       method: "DELETE",
     });
     return await response.json();
@@ -172,11 +173,23 @@ export async function deleteVideo(videoId: string) {
   }
 }
 
+export async function deleteBook(bookId: string) {
+  try {
+    const response = await authFetch(`${ENDPOINTS.CRAWL_BOOKS}/${encodeURIComponent(bookId)}`, {
+      method: "DELETE",
+    });
+    return await response.json();
+  } catch (err) {
+    console.error("Error deleting book:", err);
+    return { success: false, error: MESSAGES.ERROR };
+  }
+}
+
 export async function publishVideoToYouTube(videoId: string) {
   try {
-    const url = new URL(`${ENDPOINTS.CRAWL_VIDEOS}/${encodeURIComponent(videoId)}/publish-youtube`);
+    const url = new URL(`${ENDPOINTS.VIDEOS}/${encodeURIComponent(videoId)}/publish-youtube`);
 
-    const response = await fetch(url.toString(), {
+    const response = await authFetch(url.toString(), {
       method: "POST",
     });
     return await response.json();

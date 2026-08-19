@@ -73,6 +73,17 @@ async def get_videos_by_book_url(book_url: str):
     )
 
 
+async def get_all_videos():
+    if hasattr(client, "video"):
+        return await client.video.find_many(
+            order={"createdAt": "desc"},
+        )
+
+    return await client.query_raw(
+        'SELECT * FROM "Video" ORDER BY "createdAt" DESC',
+    )
+
+
 async def get_video_by_id(video_id: str):
     if not video_id:
         return None
