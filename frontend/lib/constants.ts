@@ -15,6 +15,8 @@ export const ENDPOINTS = {
   AUTH_REGISTER: `${CRAWLER_BASE_URL}/auth/register`,
   AUTH_LOGIN: `${CRAWLER_BASE_URL}/auth/login`,
   AUTH_ME: `${CRAWLER_BASE_URL}/auth/me`,
+  AUTH_REFRESH: `${CRAWLER_BASE_URL}/auth/refresh`,
+  AUTH_LOGOUT: `${CRAWLER_BASE_URL}/auth/logout`,
   USER_HISTORY: `${CRAWLER_BASE_URL}/user/history`,
   USER_LIBRARY: `${CRAWLER_BASE_URL}/user/library`,
   USER_LIBRARY_LIST: `${CRAWLER_BASE_URL}/user/library/list`,

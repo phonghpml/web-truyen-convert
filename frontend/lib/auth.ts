@@ -4,6 +4,7 @@ import type { AuthUser, ApiResponse, LibraryStatusResponse, ReadingHistory } fro
 export const AUTH_CHANGE_EVENT = "web_truyen_auth_change";
 const AUTH_TOKEN_KEY = "web_truyen_auth_token";
 const AUTH_USER_KEY = "web_truyen_auth_user";
+let refreshPromise: Promise<{ token: string; user: AuthUser } | null> | null = null;
 
 function safeParse(value: string | null) {
   if (!value) return null;
@@ -127,23 +128,64 @@ export async function authFetch(input: RequestInfo, init: RequestInit = {}) {
   const headers = buildAuthHeaders(init.headers || {}, init.body ?? null);
   const res = await fetch(input, {
     ...init,
+    credentials: init.credentials ?? "include",
     headers,
   });
 
   if (res.status === 401 && typeof window !== "undefined") {
-    try {
-      const body = await res.clone().json().catch(() => null);
-      const detail = body && typeof body.detail === "string" ? body.detail.toLowerCase() : "";
-      if (detail.includes("expired")) {
-        clearAuth();
-        dispatchAuthChange();
-      }
-    } catch {
-      // ignore
+    const refreshed = await refreshFromCookie();
+    if (refreshed) {
+      const retryHeaders = buildAuthHeaders(init.headers || {}, init.body ?? null);
+      return fetch(input, {
+        ...init,
+        credentials: init.credentials ?? "include",
+        headers: retryHeaders,
+      });
+    }
+
+    if (getAuthToken()) {
+      clearAuth();
+      dispatchAuthChange();
     }
   }
 
   return res;
+}
+
+export async function refreshFromCookie() {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(ENDPOINTS.AUTH_REFRESH, { method: "POST", credentials: "include" });
+      const data = await res.json().catch(() => null);
+      const token = data?.success && data.data?.token;
+      const user = data?.success && data.data?.user;
+      if (!res.ok || typeof token !== "string" || !user) return null;
+
+      saveAuth(token, user);
+      dispatchAuthChange();
+      return { token, user };
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+export async function logout() {
+  try {
+    await fetch(ENDPOINTS.AUTH_LOGOUT, {
+      method: "POST",
+      credentials: "include",
+    });
+  } finally {
+    clearAuth();
+    dispatchAuthChange();
+  }
 }
 
 export async function register(email: string, password: string) {
@@ -159,6 +201,7 @@ export async function register(email: string, password: string) {
 export async function login(email: string, password: string) {
   const response = await fetch(ENDPOINTS.AUTH_LOGIN, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });

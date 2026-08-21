@@ -55,6 +55,7 @@ model User {
 
   accounts         Account[]
   sessions         Session[]
+  refreshTokens    RefreshToken[]
   readingHistories ReadingHistory[]
   userLibraries    UserLibrary[]
 }

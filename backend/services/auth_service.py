@@ -19,7 +19,7 @@ async def create_refresh_token(user_email: str, expires_days: Optional[int] = No
     days = expires_days if expires_days is not None else DEFAULT_EXPIRES_DAYS
     expires_at = _now_utc() + timedelta(days=days)
 
-    await db_mod.client.refresh_token.create(
+    await db_mod.client.refreshtoken.create(
         data={
             "token": token,
             "userEmail": user_email,
@@ -34,7 +34,7 @@ async def verify_refresh_token(token: Optional[str]):
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
 
-    rt = await db_mod.client.refresh_token.find_unique(where={"token": token})
+    rt = await db_mod.client.refreshtoken.find_unique(where={"token": token})
     if not rt:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found")
 
@@ -50,7 +50,7 @@ async def verify_refresh_token(token: Optional[str]):
 
 async def revoke_refresh_token(token: str):
     try:
-        await db_mod.client.refresh_token.update(where={"token": token}, data={"revoked": True})
+        await db_mod.client.refreshtoken.update(where={"token": token}, data={"revoked": True})
     except Exception:
         # ignore if not found
         pass
@@ -64,4 +64,4 @@ async def rotate_refresh_token(old_token: Optional[str], user_email: str) -> str
 
 
 async def revoke_all_refresh_tokens_for_user(user_email: str):
-    await db_mod.client.refresh_token.update_many(where={"userEmail": user_email}, data={"revoked": True})
+    await db_mod.client.refreshtoken.update_many(where={"userEmail": user_email}, data={"revoked": True})

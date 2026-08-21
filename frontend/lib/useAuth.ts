@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getStoredUser, getAuthToken, isTokenExpired, clearAuth, fetchMe, saveAuth, dispatchAuthChange, AUTH_CHANGE_EVENT } from "./auth";
+import { getStoredUser, getAuthToken, isTokenExpired, clearAuth, fetchMe, saveAuth, dispatchAuthChange, AUTH_CHANGE_EVENT, refreshFromCookie, logout } from "./auth";
 import type { AuthUser } from "./types";
 
 export function useAuth() {
@@ -15,13 +15,37 @@ export function useAuth() {
         const token = getAuthToken();
 
         if (!token) {
-          // no token: use stored if any but clear if inconsistent
+          // Try silent refresh via HttpOnly cookie
+          const refreshed = await refreshFromCookie();
+          if (refreshed && refreshed.token) {
+            const refreshedUser: AuthUser = {
+              email: refreshed.user?.email,
+              name: refreshed.user?.name,
+              role: refreshed.user?.role,
+            };
+            setUser(refreshedUser);
+            return;
+          }
+
+          // no token and refresh failed: use stored if any but clear if inconsistent
           setUser(stored);
           return;
         }
 
-        // token exists: if expired, clear and stop
+        // token exists: if expired, attempt cookie refresh
         if (isTokenExpired(token)) {
+          const refreshed = await refreshFromCookie();
+          if (refreshed && refreshed.token) {
+            const refreshedUser: AuthUser = {
+              email: refreshed.user?.email,
+              name: refreshed.user?.name,
+              role: refreshed.user?.role,
+            };
+            setUser(refreshedUser);
+            return;
+          }
+
+          // cookie refresh failed
           clearAuth();
           setUser(null);
           dispatchAuthChange();
@@ -42,7 +66,17 @@ export function useAuth() {
             return;
           }
         } catch (err) {
-          // validation failed: clear auth
+          // validation failed: try cookie refresh
+          const refreshed = await refreshFromCookie();
+          if (refreshed && refreshed.token) {
+            const refreshedUser: AuthUser = {
+              email: refreshed.user?.email,
+              name: refreshed.user?.name,
+              role: refreshed.user?.role,
+            };
+            setUser(refreshedUser);
+            return;
+          }
         }
 
         clearAuth();
@@ -60,11 +94,16 @@ export function useAuth() {
     return () => window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
   }, []);
 
-  const signOut = useCallback(() => {
-    clearAuth();
-    setUser(null);
-    setIsLoading(false);
-    dispatchAuthChange();
+  const signOut = useCallback(async () => {
+    try {
+      await logout();
+    } catch {
+      clearAuth();
+      dispatchAuthChange();
+    } finally {
+      setUser(null);
+      setIsLoading(false);
+    }
   }, []);
 
   return {

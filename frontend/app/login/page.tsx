@@ -1,14 +1,17 @@
 "use client";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { login, saveAuth, fetchMe, dispatchAuthChange } from "@/lib/auth";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const router = useRouter();
+  const { success, error } = useToast();
 
   const validateLogin = () => {
     if (!email.trim()) return 'Vui lòng nhập email.';
@@ -21,19 +24,18 @@ export default function Login() {
     e.preventDefault();
     const validationError = validateLogin();
     if (validationError) {
-      setFeedback({ type: 'error', message: validationError });
+      error(validationError);
       return;
     }
 
     setLoading(true);
-    setFeedback(null);
 
     try {
       const res = await login(email, password);
       const message = res?.detail || res?.error || res?.message || "Sai email hoặc mật khẩu!";
 
       if (!res.success || !res.data?.token) {
-        setFeedback({ type: 'error', message });
+        error(message);
         return;
       }
 
@@ -51,10 +53,10 @@ export default function Login() {
         console.warn("Không thể tải thông tin user sau login", err);
       }
       dispatchAuthChange();
-      setFeedback({ type: 'success', message: 'Đăng nhập thành công!' });
+      success("Đăng nhập thành công!");
       setTimeout(() => router.push("/"), 500);
     } catch {
-      setFeedback({ type: 'error', message: 'Đã có lỗi xảy ra!' });
+      error("Đã có lỗi xảy ra!");
     } finally {
       setLoading(false);
     }
@@ -87,29 +89,33 @@ export default function Login() {
                 className="w-full p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl text-sm outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all placeholder:text-zinc-700"
                 onChange={(e) => {
                   setEmail(e.target.value.toLowerCase());
-                  setFeedback(null);
                 }} 
               />
             </div>
             
             <div className="space-y-1">
               <label className="text-[10px] uppercase font-bold text-zinc-500 ml-1">Mật khẩu</label>
-              <input 
-                type="password" placeholder="••••••••" required
-                className="w-full p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl text-sm outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all placeholder:text-zinc-700"
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setFeedback(null);
-                }} 
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"} placeholder="••••••••" required
+                  className="w-full p-3 pr-11 bg-zinc-900/50 border border-zinc-800 rounded-xl text-sm outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all placeholder:text-zinc-700"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiển thị mật khẩu"}
+                  title={showPassword ? "Ẩn mật khẩu" : "Hiển thị mật khẩu"}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition-colors hover:text-orange-400"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
           </div>
-
-          {feedback && (
-            <div className={`rounded-xl border px-3 py-2 text-sm ${feedback.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
-              {feedback.message}
-            </div>
-          )}
 
           <button 
             disabled={loading}

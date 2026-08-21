@@ -2,7 +2,12 @@
 "use client";
 
 import { AuthGuard } from "./AuthGuard";
+import { ToastProvider } from "./ui/ToastProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <AuthGuard>{children}</AuthGuard>;
+  return (
+    <ToastProvider>
+      <AuthGuard>{children}</AuthGuard>
+    </ToastProvider>
+  );
 }
