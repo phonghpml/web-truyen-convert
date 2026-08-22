@@ -14,7 +14,8 @@ import database as db_mod
 SECRET_KEY = os.getenv("APP_SECRET") or os.getenv("DATABASE_URL") or "development-secret"
 JWT_SECRET = os.getenv("JWT_SECRET") or SECRET_KEY
 JWT_ALGO = os.getenv("JWT_ALGO") or "HS256"
-ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS") or 15 * 60)
+# 15 days in seconds; can be overridden via ACCESS_TOKEN_EXPIRE_SECONDS in .env
+ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS") or 15 * 24 * 60 * 60)
 security = HTTPBearer()
 
 

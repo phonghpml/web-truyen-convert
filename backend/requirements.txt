@@ -10,7 +10,7 @@ bcrypt
 gunicorn
 edge-tts
 python-slugify
-cloakbrowser==0.4.11
+cloakbrowser==0.5.8
 python-multipart
 onnxruntime
 phonemizer
