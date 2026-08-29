@@ -110,10 +110,6 @@ export default function CrawlPage() {
     }
   };
 
-  const handleCreateVideo = (jobId: string) => {
-    router.push(`/admin/videos?job_id=${encodeURIComponent(jobId)}`);
-  };
-
   const toggleJobSelection = (jobId: string) => {
     setSelectedJobIds((current) =>
       current.includes(jobId) ? current.filter((id) => id !== jobId) : [...current, jobId]
@@ -269,7 +265,6 @@ export default function CrawlPage() {
                 onPause={handlePause}
                 onResume={handleResume}
                 onDelete={handleDelete}
-                onCreateVideo={handleCreateVideo}
                 onBulkPause={() => void runBulkJobAction("pause")}
                 onBulkResume={() => void runBulkJobAction("resume")}
                 onBulkDelete={() => void runBulkJobAction("delete")}

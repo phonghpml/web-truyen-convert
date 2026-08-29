@@ -50,14 +50,14 @@ async def save_chapter_content(url: str, paragraphs: list[str], chapter_title: s
     if not chapter:
         return None
 
-    # Prepend chapter title if provided, adding a trailing period when missing
+    # Keep the original chapter-title behavior for reading UX and TTS
     content_paragraphs = paragraphs or []
     if chapter_title:
         title_text = chapter_title.strip()
         if title_text and not title_text.endswith((".", "?", "!", "…")):
             title_text = f"{title_text}."
         content_paragraphs = [title_text] + content_paragraphs
-    
+
     content_text = "\n".join(content_paragraphs) if content_paragraphs else ""
     await client.chapter.update(where={"url": url}, data={"content": content_text})
 

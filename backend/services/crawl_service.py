@@ -11,7 +11,9 @@ from crawl_queue import CrawlChapterItem, CrawlJobData, CrawlJobStatus, CrawlCha
 
 logger = logging.getLogger(__name__)
 
-DELAY_SECONDS_PER_CHAPTER = 15
+# Delay ước lượng để chậm nhẹ hơn, giảm nguy cơ bị CAPTCHA/anti-bot
+# nhưng vẫn giữ browser context sống xuyên suốt job crawl.
+DELAY_SECONDS_PER_CHAPTER = 20
 
 
 def _get_book_title(title_vi: str | None, title_cn: str | None, fallback: str) -> str:
@@ -195,8 +197,10 @@ async def crawl_job_worker(job: CrawlJobData, manager: CrawlQueueManager) -> Non
 
         manager.complete_job(job.job_id)
         await persist_crawl_job(job)
+        await scr.close_browser()
     except Exception:
         manager.fail_job(job.job_id)
+        await scr.close_browser()
 
 
 async def submit_crawl(raw_url: str, queue_manager: CrawlQueueManager):
@@ -210,6 +214,8 @@ async def submit_crawl(raw_url: str, queue_manager: CrawlQueueManager):
     if not raw_chapters:
         raise ValueError("Không lấy được danh sách chương từ SangTacViet")
 
+    # browser context is intentionally kept open for the whole crawl job,
+    # then closed once the job ends so we avoid reinitializing Chromium per chapter.
     book_data = _build_book_data(
         source_url=normalized_url,
         title_vi=book_info.get("title_vi"),

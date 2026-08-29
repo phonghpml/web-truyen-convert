@@ -30,6 +30,7 @@ class CrawlChapterStatus(str, Enum):
     pending = "pending"
     skipped = "skipped"
     crawled = "crawled"
+    failed = "failed"
 
 
 @dataclass

@@ -43,6 +43,21 @@ def _join_tags(tags: list[str]) -> str:
     return ", ".join(seen)
 
 
+def _safe_youtube_tag(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    tag = str(value)
+    tag = tag.replace("#", " ").replace("@", " ").replace("/", " ").replace("\\", " ")
+    tag = tag.replace("http://", " ").replace("https://", " ")
+    tag = re.sub(r"[^\w\s\u00C0-\u024F\u1E00-\u1EFF]", " ", tag, flags=re.UNICODE)
+    tag = re.sub(r"\s+", " ", tag).strip()
+    tag = tag.strip("-_. ")
+    if not tag or len(tag) < 2 or len(tag) > 30:
+        return None
+    return tag
+
+
 def build_video_publish_metadata(
     *,
     book_title: str | None = None,
@@ -113,15 +128,15 @@ def build_video_publish_metadata(
         f"#{_slug_compact(safe_book_title)} #{_slug_compact(channel_name)} #TruyenAudioConvert #TruyenAudioHay #SachNoi"
     )
 
-    tags = [
+    tag_pool = [
         safe_book_title,
         _remove_diacritics(safe_book_title),
         f"{safe_book_title} story {story_start} {story_end}",
         f"{safe_book_title} chương {actual_start} {actual_end}",
-        f"{safe_book_title} audio",
         f"truyện {safe_book_title}",
-        channel_name,
-        _remove_diacritics(channel_name),
+        f"truyen {safe_book_title}",
+        "truyện audio",
+        "truyen audio",
         "truyện audio hay",
         "truyen audio hay",
         "truyện audio convert",
@@ -130,9 +145,17 @@ def build_video_publish_metadata(
         "sach noi",
         "nghe truyện audio",
         "truyen hay full",
+        channel_name,
+        _remove_diacritics(channel_name),
     ]
     if clean_author_name:
-        tags.extend([clean_author_name, _remove_diacritics(clean_author_name)])
+        tag_pool.extend([clean_author_name, _remove_diacritics(clean_author_name)])
+
+    tags = []
+    for value in tag_pool:
+        tag = _safe_youtube_tag(value)
+        if tag:
+            tags.append(tag)
 
     return {
         "author_name": clean_author_name,

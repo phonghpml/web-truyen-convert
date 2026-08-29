@@ -12,6 +12,9 @@ edge-tts
 python-slugify
 cloakbrowser==0.5.8
 python-multipart
+requests
+imageio-ffmpeg
+piper-tts
 onnxruntime
 phonemizer
 vietnormalizer

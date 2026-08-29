@@ -44,6 +44,7 @@ def serialize_chapter_row(row: dict) -> dict:
         "url": _get_field(row, "url"),
         "slug": (_get_field(row, "slug") or _slugify(title)),
         "chapter_no": _get_field(row, "chapter_no"),
+        "content": _get_field(row, "content") or "",
         "access": _get_field(row, "access") or "regular",
         "is_story_content": _get_field(row, "is_story_content", False),
         "updated_at": _get_field(row, "updatedAt") or _get_field(row, "updated_at"),

@@ -157,10 +157,21 @@ export default function ChapterPage() {
     try {
       const text = encodeURIComponent(paragraphs[index]);
       const response = await fetch(`${CRAWLER_BASE_URL}/stream-chapter-audio?text=${text}&rate=${encodeURIComponent(speed)}&voice=${voice}`);
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new Error(`Audio request failed for paragraph ${index}: ${response.status} ${errText.slice(0, 200)}`);
+      }
       const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error(`Empty audio blob for paragraph ${index}`);
+      }
       blobCache.current[index] = URL.createObjectURL(blob);
-    } catch (e) { console.error(e); }
-    finally { loadingTasks.current.delete(index); }
+    } catch (e) {
+      console.error(e);
+      delete blobCache.current[index];
+    } finally {
+      loadingTasks.current.delete(index);
+    }
   };
 
   const playParagraph = async (index: number) => {
@@ -169,14 +180,41 @@ export default function ChapterPage() {
     setActiveIndex(index);
     setIsPlaying(true);
     document.getElementById(`para-${index}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (!blobCache.current[index]) await fetchAudioBlob(index);
-    const audioUrl = blobCache.current[index];
-    if (audioUrl) {
-      audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(() => setIsPlaying(false));
-      for (let i = 1; i <= 3; i++) fetchAudioBlob(index + i);
+
+    if (!blobCache.current[index]) {
+      await fetchAudioBlob(index);
     }
-    audioRef.current.onended = () => playParagraph(index + 1);
+
+    const audioUrl = blobCache.current[index];
+    if (!audioUrl) {
+      const fallbackIndex = paragraphs.findIndex((_, i) => i > index && blobCache.current[i]);
+      if (fallbackIndex >= 0) {
+        await playParagraph(fallbackIndex);
+        return;
+      }
+      setIsPlaying(false);
+      return;
+    }
+
+    audioRef.current.src = audioUrl;
+    audioRef.current.play().catch(() => setIsPlaying(false));
+
+    audioRef.current.onended = async () => {
+      const nextIndex = index + 1;
+      if (nextIndex < paragraphs.length) {
+        if (!blobCache.current[nextIndex]) {
+          await fetchAudioBlob(nextIndex);
+        }
+        if (blobCache.current[nextIndex]) {
+          playParagraph(nextIndex);
+          return;
+        }
+      }
+      setIsPlaying(false);
+      setActiveIndex(-1);
+    };
+
+    for (let i = 1; i <= 3; i++) fetchAudioBlob(index + i);
   };
 
   const stopAudio = () => {
@@ -266,7 +304,7 @@ export default function ChapterPage() {
                   <select value={voice} onChange={(e) => { setVoice(e.target.value); clearBlobCache(); }} className="bg-transparent outline-none cursor-pointer">
                     <option value="vi-VN-NamMinhNeural">Male</option>
                     <option value="vi-VN-HoaiMyNeural">Female</option>
-                    <option value="vi-VN-AnNeural">An (Child)</option>
+                    <option value="nghitts:ngochuyennew">NghiTTS</option>
                   </select>
                 </div>
               </div>

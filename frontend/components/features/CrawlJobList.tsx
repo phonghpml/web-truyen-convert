@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Check, ChevronLeft, ChevronRight, Pause, Play, Trash2, Video } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pause, Play, Trash2 } from "lucide-react";
 import { CrawlJob } from "@/lib/crawl-hooks";
 
 interface CrawlJobListProps {
@@ -16,7 +16,6 @@ interface CrawlJobListProps {
   onPause: (jobId: string) => void;
   onResume: (jobId: string) => void;
   onDelete: (jobId: string) => void;
-  onCreateVideo: (jobId: string) => void;
   onBulkPause: () => void;
   onBulkResume: () => void;
   onBulkDelete: () => void;
@@ -57,7 +56,6 @@ export function CrawlJobList({
   onPause,
   onResume,
   onDelete,
-  onCreateVideo,
   onBulkPause,
   onBulkResume,
   onBulkDelete,
@@ -104,10 +102,10 @@ export function CrawlJobList({
                     <td className="px-4 py-4 align-top"><button type="button" onClick={() => onToggleJob(job.job_id)} aria-label={`Chọn ${job.title_vi || "job"}`} className={`grid h-5 w-5 place-items-center rounded border ${selected ? "border-orange-500 bg-orange-500 text-black" : "border-zinc-600"}`}>{selected ? <Check size={14} /> : null}</button></td>
                     <td className="max-w-[300px] px-4 py-4 align-top"><div className="flex gap-3"><div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">{job.cover_url ? <Image src={job.cover_url} alt={job.title_vi || "Bìa truyện"} fill className="object-cover" unoptimized /> : <span className="grid h-full place-items-center text-[8px] text-zinc-600">N/A</span>}</div><div className="min-w-0"><div className="truncate font-semibold text-white">{job.title_vi || "Truyện đang cào"}</div>{job.author_vi ? <div className="mt-1 truncate text-xs text-zinc-400">{job.author_vi}</div> : null}<div className="mt-1 truncate text-xs text-zinc-600" title={job.book_url}>{job.book_url}</div></div></div></td>
                     <td className="px-4 py-4 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${statusStyles[job.status] || "bg-zinc-700 text-zinc-200"}`}>{statusLabels[job.status] || job.status}</span></td>
-                    <td className="px-4 py-4 align-top"><div className="flex items-center justify-between text-xs text-zinc-400"><span>{processed}/{total || job.total_chapters || 0}</span><span>{percent}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full bg-orange-500" style={{ width: `${percent}%` }} /></div>{job.current_chapter_title ? <div className="mt-2 truncate text-xs text-zinc-500" title={job.current_chapter_title}>{job.current_chapter_title}</div> : null}</td>
+                    <td className="px-4 py-4 align-top"><div className="flex items-center justify-between text-xs text-zinc-400"><span>{processed}/{total || job.total_chapters || 0}</span><span>{percent}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full bg-orange-500" style={{ width: `${percent}%` }} /></div>{job.current_chapter_title ? <div className="mt-2 truncate text-xs text-zinc-500" title={job.current_chapter_title}>{job.current_chapter_title}</div> : null}{job.latest_chapter_event ? <div className={`mt-2 line-clamp-2 rounded-md border px-2 py-1 text-[11px] ${job.latest_chapter_event_type === "error" ? "border-red-700/60 bg-red-950/30 text-red-200" : job.latest_chapter_event_type === "success" ? "border-emerald-700/60 bg-emerald-950/30 text-emerald-200" : job.latest_chapter_event_type === "running" ? "border-orange-700/60 bg-orange-950/20 text-orange-200" : "border-zinc-700 bg-zinc-900/60 text-zinc-300"}`}>{job.latest_chapter_event}</div> : null}</td>
                     <td className="px-4 py-4 align-top text-xs text-zinc-400">Tổng: {total || job.total_chapters || 0}<br />Còn: {job.remaining_nonvip_chapters ?? job.remaining_chapters ?? 0}</td>
                     <td className="whitespace-nowrap px-4 py-4 align-top text-xs text-zinc-500">{formatDate(job.updated_at || job.created_at)}</td>
-                    <td className="sticky right-0 z-[1] bg-[#101010] px-4 py-4 align-top shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.9)]"><div className="flex justify-end gap-2">{(job.status === "running" || job.status === "queued") ? <button type="button" onClick={() => onPause(job.job_id)} title="Tạm dừng" className="rounded-lg border border-zinc-700 p-2 text-zinc-300 hover:border-orange-500"><Pause size={15} /></button> : null}{(job.status === "paused" || job.status === "failed") ? <button type="button" onClick={() => onResume(job.job_id)} title="Tiếp tục" className="rounded-lg border border-emerald-700 p-2 text-emerald-300 hover:bg-emerald-950/30"><Play size={15} /></button> : null}<button type="button" onClick={() => onCreateVideo(job.job_id)} title="Tạo video" className="rounded-lg border border-blue-700 p-2 text-blue-300 hover:bg-blue-950/30"><Video size={15} /></button><button type="button" onClick={() => onDelete(job.job_id)} title="Xóa" className="rounded-lg border border-red-700 p-2 text-red-300 hover:bg-red-950/30"><Trash2 size={15} /></button></div></td>
+                    <td className="sticky right-0 z-[1] bg-[#101010] px-4 py-4 align-top shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.9)]"><div className="flex justify-end gap-2">{(job.status === "running" || job.status === "queued") ? <button type="button" onClick={() => onPause(job.job_id)} title="Tạm dừng" className="rounded-lg border border-zinc-700 p-2 text-zinc-300 hover:border-orange-500"><Pause size={15} /></button> : null}{(job.status === "paused" || job.status === "failed") ? <button type="button" onClick={() => onResume(job.job_id)} title="Tiếp tục" className="rounded-lg border border-emerald-700 p-2 text-emerald-300 hover:bg-emerald-950/30"><Play size={15} /></button> : null}<button type="button" onClick={() => onDelete(job.job_id)} title="Xóa" className="rounded-lg border border-red-700 p-2 text-red-300 hover:bg-red-950/30"><Trash2 size={15} /></button></div></td>
                   </tr>
                 );
               })}

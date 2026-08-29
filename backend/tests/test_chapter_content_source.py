@@ -1,7 +1,31 @@
 import pytest
 
 import main
+import scraper
 from db import chapter as db_chapter
+
+
+@pytest.mark.parametrize(
+    "raw_data, expected_fragments",
+    [
+        (
+            "<p>\n    <span style='color:gray;font-size:12px;'>@Bạn đang đọc bản lưu trong hệ thống</span>\n</p>\n\t<i h='nam hải' t='南海' v='Nam Hải/nam hải/Nam hải' p='ns'>Nam Hải</i>\n<i h='đạo' t='道' v='đạo/nói/đường/đường đi/' p='q'>đạo</i>",
+            ["Nam Hải", "đạo"],
+        ),
+        (
+            "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>\n<html><body><p idx=\"0\">【 <i h='đạo trường' t='道长' v='đạo trưởng/Đạo trưởng' p='n'>Đạo trưởng</i>, <i h='ngã môn' t='我们' v='chúng ta/chúng tôi/chúng tao/chúng tớ/Chúng ta' p='r'>chúng ta</i> <i h='giá' t='这' v='cái này/là cái này/giá/này/vậy/đây/' p='r'>cái này</i> <i h='ban thượng' t='班上' v='lớp học/trong lớp' p='s'>lớp học</i> ?】</p></body></html>",
+            ["Đạo trưởng", "chúng ta", "lớp học"],
+        ),
+    ],
+)
+def test_normalize_stv_chapter_data_handles_both_payload_variants(raw_data, expected_fragments):
+    text = scraper.normalize_stv_chapter_data(raw_data)
+
+    assert text
+    assert "@Bạn đang đọc bản lưu trong hệ thống" not in text
+    for fragment in expected_fragments:
+        assert fragment in text
+    assert "<" not in text
 
 
 @pytest.mark.asyncio

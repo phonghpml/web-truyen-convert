@@ -258,6 +258,24 @@ async def _job_to_payload(job: CrawlJobData, db_chapter_count: int | None = None
         crawled_nonvip = processed_nonvip
         remaining_nonvip = max(0, fallback_total - processed_nonvip)
 
+    latest_chapter_event = None
+    latest_chapter_event_type = "info"
+    if job.chapters:
+        ordered = sorted(job.chapters, key=lambda chapter: chapter.chapter_no)
+        for chapter in reversed(ordered):
+            status = chapter.status
+            if status == CrawlChapterStatus.crawled:
+                latest_chapter_event = f"Đã crawl xong chương {chapter.chapter_no}: {chapter.title_vi or 'Không tên'}"
+                latest_chapter_event_type = "success"
+                break
+            if status == CrawlChapterStatus.failed:
+                latest_chapter_event = f"Lỗi chương {chapter.chapter_no}: {chapter.title_vi or 'Không tên'}"
+                latest_chapter_event_type = "error"
+                break
+        if latest_chapter_event is None and job.current_chapter_title:
+            latest_chapter_event = f"Đang crawl: {job.current_chapter_title}"
+            latest_chapter_event_type = "running"
+
     payload = {
         "job_id": job.job_id,
         "book_url": job.book_url,
@@ -281,6 +299,8 @@ async def _job_to_payload(job: CrawlJobData, db_chapter_count: int | None = None
         "processed_nonvip_chapters": processed_nonvip,
         "crawled_nonvip_chapters": crawled_nonvip,
         "remaining_nonvip_chapters": remaining_nonvip,
+        "latest_chapter_event": latest_chapter_event,
+        "latest_chapter_event_type": latest_chapter_event_type,
         "chapters": [],
     }
 

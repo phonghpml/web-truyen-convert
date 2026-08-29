@@ -13,6 +13,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
+def _cookie_secure_flag() -> bool:
+    return os.getenv("COOKIE_SECURE", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _get_user_value(user, key, default=None):
     if user is None:
         return default
@@ -100,7 +104,7 @@ async def login(request: AuthRequest, response: Response):
     refresh_token = await auth_service.create_refresh_token(email)
 
     # Cookie options: HttpOnly, Secure where appropriate, SameSite lax to allow OAuth flows
-    secure_flag = False if os.getenv("DEV") in ("1", "true", "True") else True
+    secure_flag = _cookie_secure_flag()
     max_age = int(os.getenv("REFRESH_TOKEN_EXPIRES_SECONDS", 30 * 24 * 3600))
     response.set_cookie(
         key="refresh_token",
@@ -137,7 +141,7 @@ async def refresh(request: Request, response: Response):
 
     # Rotate refresh token: revoke old and issue new
     new_refresh = await auth_service.rotate_refresh_token(token, user_email)
-    secure_flag = False if os.getenv("DEV") in ("1", "true", "True") else True
+    secure_flag = _cookie_secure_flag()
     max_age = int(os.getenv("REFRESH_TOKEN_EXPIRES_SECONDS", 30 * 24 * 3600))
     response.set_cookie(
         key="refresh_token",
@@ -172,7 +176,7 @@ async def logout(request: Request, response: Response):
         await auth_service.revoke_refresh_token(token)
 
     # Clear cookie
-    response.set_cookie(key="refresh_token", value="", httponly=True, secure=False, samesite="lax", max_age=0, path="/")
+    response.set_cookie(key="refresh_token", value="", httponly=True, secure=_cookie_secure_flag(), samesite="lax", max_age=0, path="/")
     return {"success": True}
 
 

@@ -4,8 +4,12 @@ export const CRAWLER_BASE_URL = (process.env.NEXT_PUBLIC_CRAWLER_URL || "http://
 // API Endpoints
 export const ENDPOINTS = {
   BOOKS: `${CRAWLER_BASE_URL}/books`,
+  BOOKS_MANUAL: `${CRAWLER_BASE_URL}/books/manual`,
+  BOOKS_UPDATE: (bookId: string) => `${CRAWLER_BASE_URL}/books/${bookId}`,
+  BOOKS_CHAPTERS: (bookId: string) => `${CRAWLER_BASE_URL}/books/${bookId}/chapters`,
   BOOKS_SEARCH: `${CRAWLER_BASE_URL}/books/search`,
   CHAPTERS: `${CRAWLER_BASE_URL}/chapters`,
+  CHAPTER_UPDATE: (chapterId: string) => `${CRAWLER_BASE_URL}/chapters/${chapterId}`,
   CRAWLER_INFO: `${CRAWLER_BASE_URL}/get-basic-info`,
   CRAWLER_CHAPTERS: `${CRAWLER_BASE_URL}/get-chapters`,
   CRAWL_SUBMIT: `${CRAWLER_BASE_URL}/crawl/submit`,

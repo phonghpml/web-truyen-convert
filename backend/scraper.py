@@ -2,45 +2,106 @@ import asyncio
 import json
 import html
 import logging
+import os
 import re
 import time
 import urllib.parse
+from pathlib import Path
+from dotenv import load_dotenv
 import cloakbrowser
 
-# Biến toàn cục để tái sử dụng tài nguyên
-_context = None
+load_dotenv()
 
-async def get_browser():
+# Biến toàn cục để tái sử dụng tài nguyên trong suốt 1 job crawl
+_context = None
+_browser_lock = asyncio.Lock()
+PAGE_CLOSE_DELAY_SECONDS = 0
+STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS = 10
+STV_PROFILE_DIR = Path(__file__).resolve().parent / "browser_profiles" / "stv"
+
+
+def is_stv_persistent_profile_enabled() -> bool:
+    value = os.getenv("STV_PERSISTENT_BROWSER_ENABLED", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+async def get_browser(use_persistent: bool = False, user_data_dir: str | None = None):
     global _context
-    if _context is None:
-        try:
-            import backend.logging_config as _lc
-        except Exception:
-            pass
-        import logging
-        logging.getLogger(__name__).info("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
-        try:
-            _context = await cloakbrowser.launch_context_async(
-                headless=True,
-                viewport={'width': 1280, 'height': 720},
-                locale="vi-VN",
-                timezone_id="Asia/Ho_Chi_Minh"
-            )
-            logging.getLogger(__name__).info("✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công!")
-        except Exception as e:
-            logging.getLogger(__name__).exception(f"❌ Lỗi cấu hình cloakbrowser: {e}")
-            raise e
-    return _context
+    async with _browser_lock:
+        prev_ctx_id = id(_context) if _context is not None else None
+        logger = logging.getLogger(__name__)
+        logger.info(f"[BROWSER] get_browser called. prev_ctx_id={prev_ctx_id}, use_persistent={use_persistent}")
+        if use_persistent:
+            profile_dir = user_data_dir or str(STV_PROFILE_DIR)
+            Path(profile_dir).mkdir(parents=True, exist_ok=True)
+            try:
+                if _context is not None and not getattr(_context, "_is_persistent_profile", False):
+                    logger.warning(f"[BROWSER] replacing non-persistent context before persistent launch. old_ctx_id={id(_context)}")
+                    await _context.close()
+                    _context = None
+
+                if _context is None:
+                    logger.info("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_persistent_context_async...")
+                    _context = await cloakbrowser.launch_persistent_context_async(
+                        profile_dir,
+                        headless=True,
+                        viewport={'width': 1280, 'height': 720},
+                        locale="vi-VN",
+                        timezone="Asia/Ho_Chi_Minh",
+                        humanize=True,
+                        geoip=False,
+                    )
+                    setattr(_context, "_is_persistent_profile", True)
+                    logger.info(f"✅ Khởi chạy CloakBrowser persistent profile thành công! new_ctx_id={id(_context)}")
+                else:
+                    logger.info(f"[BROWSER] reuse existing persistent context. ctx_id={id(_context)}")
+                return _context
+            except Exception as e:
+                logger.warning(f"⚠️ Persistent profile launch failed, falling back to legacy browser context: {e}")
+                if _context is not None:
+                    try:
+                        await _context.close()
+                    except Exception:
+                        pass
+                    _context = None
+
+        if _context is None:
+            try:
+                import backend.logging_config as _lc
+            except Exception:
+                pass
+            logger.info("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
+            try:
+                _context = await cloakbrowser.launch_context_async(
+                    headless=True,
+                    viewport={'width': 1280, 'height': 720},
+                    locale="vi-VN",
+                    timezone="Asia/Ho_Chi_Minh"
+                )
+                setattr(_context, "_is_persistent_profile", False)
+                logger.info(f"✅ Khởi chạy CloakBrowser (Stealth Chromium) thành công! new_ctx_id={id(_context)}")
+            except Exception as e:
+                logger.exception(f"❌ Lỗi cấu hình cloakbrowser: {e}")
+                raise e
+        else:
+            logger.info(f"[BROWSER] reuse existing legacy context. ctx_id={id(_context)}")
+        return _context
 
 async def close_browser():
     global _context
+    logger = logging.getLogger(__name__)
     if _context is not None:
+        ctx_id = id(_context)
+        logger.warning(f"[BROWSER] close_browser called. ctx_id={ctx_id}")
         try:
             await _context.close()
         except Exception as e:
-            logging.getLogger(__name__).exception(f"⚠️ Lỗi khi đóng CloakBrowser context: {e}")
+            logger.exception(f"⚠️ Lỗi khi đóng CloakBrowser context: {e}")
         finally:
             _context = None
+            logger.warning("[BROWSER] context set to None after close")
+    else:
+        logger.warning("[BROWSER] close_browser called but _context is None")
 
 async def scrape_basic_info(url: str):
     url = urllib.parse.unquote(url) # Fix lỗi link mã hóa gây 400
@@ -63,6 +124,7 @@ async def scrape_basic_info(url: str):
         logging.getLogger(__name__).exception(f"❌ Lỗi Playwright Info: {e}")
         return None
     finally:
+        await asyncio.sleep(PAGE_CLOSE_DELAY_SECONDS)
         await page.close()
 
 async def scrape_chapters(url: str):
@@ -97,12 +159,16 @@ async def scrape_chapters(url: str):
         logging.getLogger(__name__).exception(f"❌ Lỗi Scrape Chapters: {e}")
         return []
     finally:
+        await asyncio.sleep(PAGE_CLOSE_DELAY_SECONDS)
         await page.close()
 
 async def scrape_chapter_content(url: str):
     url = urllib.parse.unquote(url).strip()
     context = await get_browser()
+    logger = logging.getLogger(__name__)
+    logger.info(f"[PAGE] New page for scrape_stv_chapter_content. ctx_id={id(context)}")
     page = await context.new_page()
+    logger.info(f"[PAGE] open page success. ctx_id={id(context)}, page_count={len(context.pages)}")
 
     try:
         # Giả lập Referer để tránh bị 69shuba nghi ngờ bot cào
@@ -137,8 +203,9 @@ async def scrape_chapter_content(url: str):
         logging.getLogger(__name__).exception(f"❌ Lỗi Scrape Content: {str(e)}")
         return None
     finally:
+        await asyncio.sleep(2)
         await page.close()
-        
+
 async def scrape_stv_basic_info(url: str):
     url = urllib.parse.unquote(url).strip()
     context = await get_browser()
@@ -172,6 +239,7 @@ async def scrape_stv_basic_info(url: str):
         logging.getLogger(__name__).exception(f"❌ Lỗi STV Info: {e}")
         return None
     finally:
+        await asyncio.sleep(PAGE_CLOSE_DELAY_SECONDS)
         await page.close()
 
 async def scrape_stv_chapters(url: str):
@@ -234,6 +302,7 @@ async def scrape_stv_chapters(url: str):
         logging.getLogger(__name__).exception(f"❌ Lỗi STV Chapters: {e}")
         return []
     finally:
+        await asyncio.sleep(PAGE_CLOSE_DELAY_SECONDS)
         await page.close()
         
 def parse_stv_data(raw_str, url):
@@ -269,6 +338,16 @@ def parse_stv_data(raw_str, url):
     return chapters
 
 
+async def get_stv_browser():
+    """Use persistent profile for STV only when the config flag is enabled; otherwise keep the legacy browser flow."""
+    if is_stv_persistent_profile_enabled():
+        try:
+            return await get_browser(use_persistent=True, user_data_dir=str(STV_PROFILE_DIR))
+        except Exception:
+            logging.getLogger(__name__).warning("⚠️ STV persistent browser failed; falling back to legacy browser context.")
+    return await get_browser()
+
+
 async def scrape_stv_chapter_content(url: str):
     # 1. Trích xuất ID để đối chiếu (Chống lấy nhầm chương cũ)
     logging.getLogger(__name__).info(f"🚀 [START] Đang xử lý chương: {url}")
@@ -282,8 +361,9 @@ async def scrape_stv_chapter_content(url: str):
         return None
 
     logging.getLogger(__name__).info(f"🚀 [START] Chapter ID={target_chap_id}, source_type={source_type}")
-    
-    context = await get_browser()
+
+    # Giữ nguyên logic scrape cũ, chỉ thử persistent profile ở STV và fallback về legacy nếu cần.
+    context = await get_stv_browser()
     page = await context.new_page()
 
     captured_data = {"raw": None, "responses": []}
@@ -392,10 +472,7 @@ async def scrape_stv_chapter_content(url: str):
         raw_data = captured_data["raw"]
         logging.getLogger(__name__).debug(f"Step 6: raw_data length={len(raw_data)} | snippet={raw_data[:200]!r}")
 
-        text = html.unescape(raw_data)
-        text = re.sub(r'<[^>]+>', '', text)
-        text = re.sub(r'@?Bạn đang đọc bản lưu trong hệ thống', '', text)
-        text = re.sub(r'\n{2,}', '\n', text)
+        text = normalize_stv_chapter_data(raw_data)
         paragraphs = [line.strip() for line in text.split('\n') if line.strip()]
         logging.getLogger(__name__).info(f"✅ [RESULT] Trích xuất xong {len(paragraphs)} đoạn từ chương {target_chap_id}")
         return "\n".join(paragraphs)
@@ -418,11 +495,53 @@ async def scrape_stv_chapter_content(url: str):
                 logging.getLogger(__name__).exception(f"⚠️ Không lưu được HTML crash: {html_exc}")
         return None
     finally:
+        logger = logging.getLogger(__name__)
         page.remove_listener("response", handle_response)
+        logger.info(f"[PAGE] closing page for STV chapter. ctx_id={id(context)}, page_count_before_close={len(context.pages)}")
+        await asyncio.sleep(STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS)
         await page.close()
+        logger.info(f"[PAGE] page closed for STV chapter. ctx_id={id(context)}, page_count_after_close={len(context.pages)}")
         logging.getLogger(__name__).info(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
     
 import datetime
+
+
+def normalize_stv_chapter_data(raw_data: str | None) -> str:
+    """Normalize STV chapter payloads that can contain either plain HTML or inline XML/HTML wrappers.
+
+    Both variants start with a string that includes nested <i> tags and sometimes literal XML declaration
+    fragments. We need to convert them to readable text without leaving behind HTML tags, escaped XML,
+    or the saved-notice banner.
+    """
+    if not raw_data:
+        return ""
+
+    text = str(raw_data)
+    text = html.unescape(text)
+
+    text = re.sub(r'@?Bạn đang đọc bản lưu trong hệ thống', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s*<\?xml[^>]*>\s*', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s*<html[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s*</html\s*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s*<head[^>]*>.*?</head\s*>', '\n', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\s*<body[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s*</body\s*>', '\n', text, flags=re.IGNORECASE)
+
+    text = re.sub(r'<i\b[^>]*>(.*?)</i>', lambda m: m.group(1), text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'</?p\b[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</?span\b[^>]*>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+
+    text = text.replace("\r", "\n")
+    text = text.replace("\xa0", " ")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{2,}", "\n", text)
+
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    return "\n".join(lines)
+
 
 async def scrape_qidian_ranking(
     category_id: str = "yuepiao", 

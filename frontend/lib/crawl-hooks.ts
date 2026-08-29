@@ -22,6 +22,8 @@ export interface CrawlJob {
   processed_nonvip_chapters: number;
   crawled_nonvip_chapters: number;
   remaining_nonvip_chapters: number;
+  latest_chapter_event?: string;
+  latest_chapter_event_type?: "info" | "running" | "success" | "error";
   db_chapter_count: number;
   db_book_exists: boolean;
   created_at: string;

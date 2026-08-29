@@ -384,15 +384,57 @@ export default function AdminVideosPage() {
               <div className="grid sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-sm text-zinc-300">Chương bắt đầu</label>
-                  <input type="number" min={1} value={videoStart} onChange={(e) => setVideoStart(Number(e.target.value) || 1)} className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white" />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    pattern="[0-9]*"
+                    value={videoStart}
+                    onKeyDown={(e) => ["e", "E", "+", "-", "."].includes(e.key) && e.preventDefault()}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      const parsed = Number(next);
+                      setVideoStart(Number.isFinite(parsed) && parsed > 0 ? parsed : 1);
+                    }}
+                    className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white"
+                  />
                 </div>
                 <div>
                   <label className="text-sm text-zinc-300">Số chương mỗi video</label>
-                  <input type="number" min={1} value={videoCount} onChange={(e) => setVideoCount(Number(e.target.value) || 1)} className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white" />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    pattern="[0-9]*"
+                    value={videoCount}
+                    onKeyDown={(e) => ["e", "E", "+", "-", "."].includes(e.key) && e.preventDefault()}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      const parsed = Number(next);
+                      setVideoCount(Number.isFinite(parsed) && parsed > 0 ? parsed : 1);
+                    }}
+                    className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white"
+                  />
                 </div>
                 <div>
                   <label className="text-sm text-zinc-300">Số video trong lô</label>
-                  <input type="number" min={1} value={videoBatchCount} onChange={(e) => setVideoBatchCount(Number(e.target.value) || 1)} className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white" />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    pattern="[0-9]*"
+                    value={videoBatchCount}
+                    onKeyDown={(e) => ["e", "E", "+", "-", "."].includes(e.key) && e.preventDefault()}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      const parsed = Number(next);
+                      setVideoBatchCount(Number.isFinite(parsed) && parsed > 0 ? parsed : 1);
+                    }}
+                    className="mt-2 w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white"
+                  />
                 </div>
               </div>
 

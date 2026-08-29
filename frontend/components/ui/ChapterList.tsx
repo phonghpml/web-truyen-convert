@@ -17,7 +17,7 @@ export const ChapterList = ({ chapters, onSelectChapter }: ChapterListProps) => 
         <h3 className="text-xl font-black uppercase italic text-white tracking-tight">Danh sách chương</h3>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 h-[600px] overflow-y-auto pr-4 custom-scrollbar">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
         {sortedChapters.map((ch, index) => {
           const access = String(ch.access || "regular").trim().toLowerCase();
 
