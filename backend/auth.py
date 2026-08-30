@@ -11,8 +11,22 @@ import bcrypt
 
 import database as db_mod
 
-SECRET_KEY = os.getenv("APP_SECRET") or os.getenv("DATABASE_URL") or "development-secret"
-JWT_SECRET = os.getenv("JWT_SECRET") or SECRET_KEY
+APP_ENV = (os.getenv("APP_ENV") or "development").strip().lower()
+APP_SECRET = (os.getenv("APP_SECRET") or "").strip()
+JWT_SECRET_VALUE = (os.getenv("JWT_SECRET") or "").strip()
+
+if APP_ENV == "development":
+    if not APP_SECRET and not JWT_SECRET_VALUE:
+        APP_SECRET = "development-secret"
+        JWT_SECRET_VALUE = "development-secret"
+elif not APP_SECRET and not JWT_SECRET_VALUE:
+    raise RuntimeError(
+        "Missing required auth secret: set APP_SECRET or JWT_SECRET before starting the app. "
+        "Do not fall back to DATABASE_URL or a hard-coded dev secret in production."
+    )
+
+SECRET_KEY = APP_SECRET or JWT_SECRET_VALUE
+JWT_SECRET = JWT_SECRET_VALUE or APP_SECRET
 JWT_ALGO = os.getenv("JWT_ALGO") or "HS256"
 # 15 days in seconds; can be overridden via ACCESS_TOKEN_EXPIRE_SECONDS in .env
 ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRE_SECONDS") or 15 * 24 * 60 * 60)
