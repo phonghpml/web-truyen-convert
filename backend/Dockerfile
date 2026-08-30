@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.11-slim
 
 # 1. Cài đặt các thư viện hệ thống cần thiết (Dùng quyền root mặc định của Docker build)
 USER root
