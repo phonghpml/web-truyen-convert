@@ -19,16 +19,23 @@ jobs:
         run: |
           # 1. Đi vào thư mục backend
           cd backend
-          
+
           # 2. Khởi tạo Git mới tại đây để xóa sạch lịch sử file > 10MB
           git init
           git config user.email "phongphml@gmail.com"
           git config user.name "phongphml"
-          
-          # 3. Thêm toàn bộ file hiện tại (đã chia nhỏ < 10MB)
+
+          # 3. Ngăn chặn file model lớn đi vào payload deploy
+          if [ -d .nghitts-models ] || find . -type f \( -name "*.onnx" -o -name "*.onnx.json" \) | grep -q .; then
+            echo "ERROR: Large TTS model files are still in the deploy payload. They must be excluded from the HF Space repo and downloaded during Docker build."
+            find . -type f \( -name "*.onnx" -o -name "*.onnx.json" \) -print
+            exit 1
+          fi
+
+          # 4. Thêm toàn bộ file hiện tại (đã chia nhỏ < 10MB)
           git add .
           git commit -m "Deploy clean version without large files"
-          
-          # 4. Ép buộc đẩy lên Hugging Face (Dùng -f)
+
+          # 5. Ép buộc đẩy lên Hugging Face (Dùng -f)
           # Lưu ý: nhánh mặc định của 'git init' thường là 'master', nên ta đẩy master:main
           git push -f https://Phonghp:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Phonghp/crawler master:main
