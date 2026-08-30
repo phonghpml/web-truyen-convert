@@ -232,7 +232,7 @@ async def _load_job_chapters(job: CrawlJobData) -> None:
     job.crawled_chapters = crawled_chapters
 
 
-async def _job_to_payload(job: CrawlJobData, db_chapter_count: int | None = None, include_chapters: bool = True) -> Dict:
+async def _job_to_payload(job: CrawlJobData, db_chapter_count: Optional[int] = None, include_chapters: bool = True) -> Dict:
     book_title, author_vi, description_vi, cover_url = await _resolve_job_book_metadata(job)
 
     if include_chapters:
@@ -872,7 +872,7 @@ async def get_video_progress_route(job_id: str):
 
 
 @oauth_router.get("/youtube/callback", response_class=HTMLResponse)
-async def youtube_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+async def youtube_oauth_callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
     if error:
         raise HTTPException(status_code=400, detail=f"OAuth error: {error}")
     if not code:

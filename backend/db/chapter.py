@@ -42,7 +42,7 @@ async def get_chapter_contents_by_urls(urls: list[str]) -> dict[str, str]:
     }
 
 
-async def save_chapter_content(url: str, paragraphs: list[str], chapter_title: str | None = None) -> None:
+async def save_chapter_content(url: str, paragraphs: list[str], chapter_title: Optional[str] = None) -> None:
     if not url:
         return None
 
@@ -62,7 +62,7 @@ async def save_chapter_content(url: str, paragraphs: list[str], chapter_title: s
     await client.chapter.update(where={"url": url}, data={"content": content_text})
 
 
-def is_story_title(title: str | None) -> bool:
+def is_story_title(title: Optional[str]) -> bool:
     """Heuristic to decide if a chapter title represents story content.
 
     Returns True when the title contains common chapter keywords or starts with a number.

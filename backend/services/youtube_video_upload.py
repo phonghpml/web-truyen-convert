@@ -17,7 +17,7 @@ YOUTUBE_REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", "").strip()
 YOUTUBE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/youtube/v3/videos"
 
 
-def _sanitize_youtube_tags(raw_tags: str | None) -> list[str]:
+def _sanitize_youtube_tags(raw_tags: Optional[str]) -> list[str]:
     if raw_tags is None:
         return []
 

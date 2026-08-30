@@ -6,14 +6,14 @@ import unicodedata
 from typing import Any
 
 
-def _normalize_text(value: str | None) -> str:
+def _normalize_text(value: Optional[str]) -> str:
     if not value:
         return ""
     text = re.sub(r"\s+", " ", value.strip())
     return text
 
 
-def _remove_diacritics(value: str | None) -> str:
+def _remove_diacritics(value: Optional[str]) -> str:
     if not value:
         return ""
     value = value.replace("đ", "d").replace("Đ", "D")
@@ -22,7 +22,7 @@ def _remove_diacritics(value: str | None) -> str:
     return re.sub(r"\s+", " ", stripped).strip()
 
 
-def _slug_compact(value: str | None) -> str:
+def _slug_compact(value: Optional[str]) -> str:
     if not value:
         return ""
     text = _remove_diacritics(value)
@@ -43,7 +43,7 @@ def _join_tags(tags: list[str]) -> str:
     return ", ".join(seen)
 
 
-def _safe_youtube_tag(value: str | None) -> str | None:
+def _safe_youtube_tag(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
 
@@ -60,15 +60,15 @@ def _safe_youtube_tag(value: str | None) -> str | None:
 
 def build_video_publish_metadata(
     *,
-    book_title: str | None = None,
-    author_name: str | None = None,
-    chapter_start: int | None = None,
-    chapter_count: int | None = None,
-    chapter_title: str | None = None,
-    story_chapter_start: int | None = None,
-    story_chapter_end: int | None = None,
-    actual_chapter_start: int | None = None,
-    actual_chapter_end: int | None = None,
+    book_title: Optional[str] = None,
+    author_name: Optional[str] = None,
+    chapter_start: Optional[int] = None,
+    chapter_count: Optional[int] = None,
+    chapter_title: Optional[str] = None,
+    story_chapter_start: Optional[int] = None,
+    story_chapter_end: Optional[int] = None,
+    actual_chapter_start: Optional[int] = None,
+    actual_chapter_end: Optional[int] = None,
 ) -> dict[str, Any]:
     safe_book_title = _normalize_text(book_title) or "Video truyện"
     clean_author_name = _normalize_text(author_name) or None

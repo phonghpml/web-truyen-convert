@@ -15,7 +15,7 @@ YOUTUBE_REDIRECT_URI = os.getenv("YOUTUBE_REDIRECT_URI", "").strip()
 YOUTUBE_SCOPES = "https://www.googleapis.com/auth/youtube.upload"
 
 
-def build_oauth_authorization_url(state: str | None = None) -> str:
+def build_oauth_authorization_url(state: Optional[str] = None) -> str:
     if not YOUTUBE_CLIENT_ID or not YOUTUBE_REDIRECT_URI:
         raise ValueError("Missing YouTube OAuth config")
 

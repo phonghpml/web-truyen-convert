@@ -88,45 +88,45 @@ class ManualChapterInput(BaseModel):
     title_vi: str = ""
     content: str = ""
     chapter_no: int = 1
-    url: str | None = None
+    url: Optional[str] = None
 
 
 class ManualBookCreateRequest(BaseModel):
     source_url: str = ""
     slug: str = ""
     title_vi: str = ""
-    title_en: str | None = None
-    author_vi: str | None = None
-    description_vi: str | None = None
-    cover_url: str | None = None
+    title_en: Optional[str] = None
+    author_vi: Optional[str] = None
+    description_vi: Optional[str] = None
+    cover_url: Optional[str] = None
     chapters: list[ManualChapterInput] = []
     bulk_chapter_text: str = ""
 
 
 class ManualChapterUpdateInput(BaseModel):
-    id: str | None = None
+    id: Optional[str] = None
     title: str = ""
     title_vi: str = ""
     content: str = ""
     chapter_no: int = 1
-    url: str | None = None
+    url: Optional[str] = None
 
 
 class ManualBookUpdateRequest(BaseModel):
     source_url: str = ""
     slug: str = ""
     title_vi: str = ""
-    title_en: str | None = None
-    author_vi: str | None = None
-    description_vi: str | None = None
-    cover_url: str | None = None
+    title_en: Optional[str] = None
+    author_vi: Optional[str] = None
+    description_vi: Optional[str] = None
+    cover_url: Optional[str] = None
     chapters: list[ManualChapterInput] = []
     existing_chapters: list[ManualChapterUpdateInput] = []
     removed_chapter_ids: list[str] = []
     bulk_chapter_text: str = ""
 
 
-def _extract_title_from_bulk_line(line: str) -> tuple[str | None, str]:
+def _extract_title_from_bulk_line(line: str) -> tuple[Optional[str], str]:
     stripped = (line or "").strip()
     if not stripped:
         return None, ""
@@ -185,7 +185,7 @@ def build_bulk_chapters_from_text(raw_text: str, start_chapter_no: int = 1) -> l
 
     lines = [line.rstrip() for line in text.split("\n")]
     built_blocks: list[dict] = []
-    current_title: str | None = None
+    current_title: Optional[str] = None
     current_lines: list[str] = []
 
     def flush_block():
@@ -274,7 +274,7 @@ def build_bulk_chapters_from_text(raw_text: str, start_chapter_no: int = 1) -> l
     return final_chapters
 
 
-def build_unique_chapter_url(base_url: str, chapter_title: str, existing_urls: set[str] | None = None) -> str:
+def build_unique_chapter_url(base_url: str, chapter_title: str, existing_urls: Optional[set[str]] = None) -> str:
     normalized_base = (base_url or "https://manual.local").rstrip("/")
     safe_title = (chapter_title or "chapter").strip() or "chapter"
     slug = slugify(safe_title, lowercase=True, separator="-") or "chapter"

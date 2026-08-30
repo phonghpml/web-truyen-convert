@@ -184,7 +184,7 @@ def _split_nghitts_text_for_tts(text: str, max_length: int = NGHITTS_MAX_CHUNK_L
 
 
 async def _generate_audio_for_chunk(chunk: str, voice: str, rate: str) -> bytes:
-    last_exception: Exception | None = None
+    last_exception: Optional[Exception] = None
 
     for attempt in range(1, MAX_TTS_RETRIES + 1):
         try:
@@ -236,7 +236,7 @@ async def _generate_audio_with_fallbacks(chunk: str, voices: list[str], rate: st
     raise RuntimeError("No audio was generated for one of the TTS chunks.")
 
 
-async def _generate_audio_chunks_parallel(chunks: list[str], voices: list[str], rate: str, concurrency: int = MAX_TTS_CONCURRENCY, job_id: str | None = None) -> list[bytes]:
+async def _generate_audio_chunks_parallel(chunks: list[str], voices: list[str], rate: str, concurrency: int = MAX_TTS_CONCURRENCY, job_id: Optional[str] = None) -> list[bytes]:
     semaphore = asyncio.Semaphore(concurrency)
 
     async def generate_chunk(chunk: str, index: int) -> bytes:
@@ -276,7 +276,7 @@ def _join_audio_arrays(audio_arrays: list[np.ndarray], sample_rate: int, pause_s
     return np.concatenate(joined)
 
 
-async def create_audio_from_text(text: str, output_path: Path, voice: str = DEFAULT_VOICE, rate: str = DEFAULT_TTS_RATE, job_id: str | None = None) -> None:
+async def create_audio_from_text(text: str, output_path: Path, voice: str = DEFAULT_VOICE, rate: str = DEFAULT_TTS_RATE, job_id: Optional[str] = None) -> None:
     if not text or not text.strip():
         raise ValueError("No text provided for audio generation")
 
@@ -326,7 +326,7 @@ async def create_audio_from_text(text: str, output_path: Path, voice: str = DEFA
             audio_file.write(audio_bytes)
 
 
-def _parse_duration_from_ffprobe(output: str) -> float | None:
+def _parse_duration_from_ffprobe(output: str) -> Optional[float]:
     match = re.search(r"Duration: (?P<hour>\d+):(\d+):(\d+\.\d+)", output)
     if not match:
         return None
@@ -336,7 +336,7 @@ def _parse_duration_from_ffprobe(output: str) -> float | None:
     return hours * 3600 + minutes * 60 + seconds
 
 
-def _get_audio_duration(audio_path: Path) -> float | None:
+def _get_audio_duration(audio_path: Path) -> Optional[float]:
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)],
@@ -349,7 +349,7 @@ def _get_audio_duration(audio_path: Path) -> float | None:
         return None
 
 
-def _build_ffmpeg_command(image_path: Path, audio_path: Path, output_path: Path, duration: float | None = None) -> list[str]:
+def _build_ffmpeg_command(image_path: Path, audio_path: Path, output_path: Path, duration: Optional[float] = None) -> list[str]:
     ffmpeg_exe = get_ffmpeg_exe()
     command = [
         ffmpeg_exe,
