@@ -7,6 +7,7 @@ import re
 import time
 import urllib.parse
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 import cloakbrowser
 
