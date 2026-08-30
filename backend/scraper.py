@@ -25,7 +25,7 @@ def is_stv_persistent_profile_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-async def get_browser(use_persistent: bool = False, user_data_dir: str | None = None):
+async def get_browser(use_persistent: bool = False, user_data_dir: Optional[str] = None):
     global _context
     async with _browser_lock:
         prev_ctx_id = id(_context) if _context is not None else None
@@ -506,7 +506,7 @@ async def scrape_stv_chapter_content(url: str):
 import datetime
 
 
-def normalize_stv_chapter_data(raw_data: str | None) -> str:
+def normalize_stv_chapter_data(raw_data: Optional[str]) -> str:
     """Normalize STV chapter payloads that can contain either plain HTML or inline XML/HTML wrappers.
 
     Both variants start with a string that includes nested <i> tags and sometimes literal XML declaration

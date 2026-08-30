@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 DELAY_SECONDS_PER_CHAPTER = 20
 
 
-def _get_book_title(title_vi: str | None, title_cn: str | None, fallback: str) -> str:
+def _get_book_title(title_vi: Optional[str], title_cn: Optional[str], fallback: str) -> str:
     return title_vi or title_cn or fallback
 
 
-def _build_book_data(source_url: str, title_vi: str | None, title_cn: str | None, author_vi: str | None, description_vi: str | None, cover_url: str | None, status: str = "info_only") -> dict:
+def _build_book_data(source_url: str, title_vi: Optional[str], title_cn: Optional[str], author_vi: Optional[str], description_vi: Optional[str], cover_url: Optional[str], status: str = "info_only") -> dict:
     title = _get_book_title(title_vi, title_cn, "Truyện từ SangTacViet")
     return {
         "source_url": source_url,
@@ -74,7 +74,7 @@ async def persist_crawl_job(job: CrawlJobData) -> None:
         logger.warning("Skipping crawl job persistence for %s because DB is unavailable: %s", job.job_id, exc)
 
 
-async def save_book_info(job: CrawlJobData, raw_info: dict | None):
+async def save_book_info(job: CrawlJobData, raw_info: Optional[dict]):
     if not job:
         return
 
