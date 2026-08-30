@@ -23,7 +23,9 @@ RUN apt-get update && apt-get install -y \
 
 # 2. Thiết lập thư mục làm việc và User
 WORKDIR /app
-RUN useradd -m -u 1000 user
+RUN useradd -m -u 1000 user && \
+    mkdir -p /app/.nghitts-models && \
+    chown -R user:user /app/.nghitts-models
 USER user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH
@@ -36,8 +38,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 COPY --chown=user . .
 
 # 5. Tải model ONNX NghiTTS từ Hugging Face để không cần đẩy file lớn lên HF Space
-RUN mkdir -p /app/.nghitts-models && \
-    curl -L --fail https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochuyennew.onnx -o /app/.nghitts-models/ngochuyennew.onnx && \
+RUN curl -L --fail https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochuyennew.onnx -o /app/.nghitts-models/ngochuyennew.onnx && \
     curl -L --fail https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochuyennew.onnx.json -o /app/.nghitts-models/ngochuyennew.onnx.json
 
 # 6. Sinh Prisma Client Python trước khi chạy ứng dụng
