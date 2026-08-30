@@ -32,8 +32,9 @@ async def save_video(data: dict):
         "updatedAt",
     ]
     placeholders = ", ".join(f"${idx + 1}" for idx in range(len(columns) - 2))
+    quoted_columns = ', '.join(f'"{c}"' for c in columns)
     query = (
-        f"INSERT INTO \"Video\" ({', '.join(f'\"{c}\"' for c in columns)}) VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) "
+        f"INSERT INTO \"Video\" ({quoted_columns}) VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) "
         f"RETURNING *"
     )
     values = [
