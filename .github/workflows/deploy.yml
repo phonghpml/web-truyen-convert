@@ -1,7 +1,7 @@
 name: Deploy Backend to HF
 on:
   push:
-    branches: [main] 
+    branches: [main, deploy]
     paths:
       - 'backend/**' # Chỉ chạy khi có thay đổi trong thư mục backend
 
