@@ -103,7 +103,7 @@ async def login(request: AuthRequest, response: Response):
     access_token = auth_utils.create_access_token(email)
     refresh_token = await auth_service.create_refresh_token(email)
 
-    # Cookie options: HttpOnly, Secure where appropriate, SameSite lax to allow OAuth flows
+    # Cookie options: HttpOnly, Secure where appropriate, SameSite none to allow cross-site usage
     secure_flag = _cookie_secure_flag()
     max_age = int(os.getenv("REFRESH_TOKEN_EXPIRES_SECONDS", 30 * 24 * 3600))
     response.set_cookie(
@@ -111,7 +111,7 @@ async def login(request: AuthRequest, response: Response):
         value=refresh_token,
         httponly=True,
         secure=secure_flag,
-        samesite="lax",
+        samesite="none",
         max_age=max_age,
         path="/",
     )
@@ -148,7 +148,7 @@ async def refresh(request: Request, response: Response):
         value=new_refresh,
         httponly=True,
         secure=secure_flag,
-        samesite="lax",
+        samesite="none",
         max_age=max_age,
         path="/",
     )
@@ -176,7 +176,7 @@ async def logout(request: Request, response: Response):
         await auth_service.revoke_refresh_token(token)
 
     # Clear cookie
-    response.set_cookie(key="refresh_token", value="", httponly=True, secure=_cookie_secure_flag(), samesite="lax", max_age=0, path="/")
+    response.set_cookie(key="refresh_token", value="", httponly=True, secure=_cookie_secure_flag(), samesite="none", max_age=0, path="/")
     return {"success": True}
 
 
