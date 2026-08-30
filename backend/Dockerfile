@@ -24,8 +24,8 @@ RUN apt-get update && apt-get install -y \
 # 2. Thiết lập thư mục làm việc và User
 WORKDIR /app
 RUN useradd -m -u 1000 user && \
-    mkdir -p /app/.nghitts-models && \
-    chown -R user:user /app/.nghitts-models
+    mkdir -p /app/.nghitts-models /app/static /app/static/uploads /app/static/videos && \
+    chown -R user:user /app/.nghitts-models /app/static
 USER user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH
