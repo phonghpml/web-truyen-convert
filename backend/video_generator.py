@@ -8,6 +8,7 @@ import edge_tts
 import numpy as np
 from imageio_ffmpeg import get_ffmpeg_exe
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
+from typing import Optional
 
 from tts_engine import NghiTTSEngine
 
