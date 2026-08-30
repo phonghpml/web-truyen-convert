@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .env
+.env.*
 venv/
 *.pyc
 __pycache__/
@@ -11,6 +12,6 @@ backend/static/videos/
 backend/static/videos/inputs/
 backend/static/videos/audio/
 backend/youtube_tokens.json
-backend/.nghitts-models/
-backend/**/*.onnx
-backend/**/*.onnx.json
+**/.nghitts-models/
+**/*.onnx
+**/*.onnx.json
