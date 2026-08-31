@@ -20,6 +20,23 @@ export function getAuthToken(): string | null {
   return window.localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
+export function hasRefreshCookie(): boolean {
+  if (typeof document === "undefined") return false;
+
+  return document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .some((part) => {
+      const [name, ...rest] = part.split("=");
+      return name === "refresh_token" && rest.join("=").trim().length > 0;
+    });
+}
+
+export function hasAuthSession(): boolean {
+  return Boolean(getAuthToken() || hasRefreshCookie());
+}
+
 function base64UrlToBase64(input: string) {
   return input.replace(/-/g, "+").replace(/_/g, "/") + "==".slice((2 - input.length * 3) & 3);
 }
@@ -61,7 +78,7 @@ export function isTokenExpired(token: string | null): boolean {
     // fallback: parse decoded as number
     const n = parseInt(decoded, 10);
     if (!Number.isNaN(n)) return n < Math.floor(Date.now() / 1000);
-  } catch (err) {
+  } catch {
     // ignore errors
     return false;
   }
@@ -153,6 +170,7 @@ export async function authFetch(input: RequestInfo, init: RequestInit = {}) {
 }
 
 export async function refreshFromCookie() {
+  if (!hasAuthSession()) return null;
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {

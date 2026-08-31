@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getStoredUser, getAuthToken, isTokenExpired, clearAuth, fetchMe, saveAuth, dispatchAuthChange, AUTH_CHANGE_EVENT, refreshFromCookie, logout } from "./auth";
+import { getStoredUser, getAuthToken, isTokenExpired, clearAuth, fetchMe, saveAuth, dispatchAuthChange, AUTH_CHANGE_EVENT, refreshFromCookie, logout, hasRefreshCookie } from "./auth";
 import type { AuthUser } from "./types";
 
 export function useAuth() {
@@ -14,26 +14,12 @@ export function useAuth() {
         const stored = getStoredUser();
         const token = getAuthToken();
 
-        if (!token) {
-          // Try silent refresh via HttpOnly cookie
-          const refreshed = await refreshFromCookie();
-          if (refreshed && refreshed.token) {
-            const refreshedUser: AuthUser = {
-              email: refreshed.user?.email,
-              name: refreshed.user?.name,
-              role: refreshed.user?.role,
-            };
-            setUser(refreshedUser);
-            return;
-          }
-
-          // no token and refresh failed: use stored if any but clear if inconsistent
-          setUser(stored);
+        if (!token && !hasRefreshCookie()) {
+          setUser(stored ?? null);
           return;
         }
 
-        // token exists: if expired, attempt cookie refresh
-        if (isTokenExpired(token)) {
+        if (!token) {
           const refreshed = await refreshFromCookie();
           if (refreshed && refreshed.token) {
             const refreshedUser: AuthUser = {
@@ -45,7 +31,29 @@ export function useAuth() {
             return;
           }
 
-          // cookie refresh failed
+          setUser(stored ?? null);
+          return;
+        }
+
+        if (isTokenExpired(token)) {
+          if (!hasRefreshCookie()) {
+            clearAuth();
+            setUser(null);
+            dispatchAuthChange();
+            return;
+          }
+
+          const refreshed = await refreshFromCookie();
+          if (refreshed && refreshed.token) {
+            const refreshedUser: AuthUser = {
+              email: refreshed.user?.email,
+              name: refreshed.user?.name,
+              role: refreshed.user?.role,
+            };
+            setUser(refreshedUser);
+            return;
+          }
+
           clearAuth();
           setUser(null);
           dispatchAuthChange();
@@ -65,7 +73,7 @@ export function useAuth() {
             setUser(refreshedUser);
             return;
           }
-        } catch (err) {
+        } catch {
           // validation failed: try cookie refresh
           const refreshed = await refreshFromCookie();
           if (refreshed && refreshed.token) {

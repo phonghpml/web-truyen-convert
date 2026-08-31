@@ -133,6 +133,9 @@ async def login(request: AuthRequest, response: Response):
 @router.post("/refresh")
 async def refresh(request: Request, response: Response):
     token = request.cookies.get("refresh_token")
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token không tồn tại")
+
     rt = await auth_service.verify_refresh_token(token)
 
     user_email = _get_user_value(rt, "userEmail") or _get_user_value(rt, "user_email")
