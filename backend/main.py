@@ -52,39 +52,33 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 default_origins = [
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://192.168.24.180:3000",
+    "http://192.168.16.1:3000",
     "https://web-truyen-convert.vercel.app",
 ]
-configured_origins = [
-    "https://web-truyen-convert.vercel.app",
-    *[
-        origin.strip()
-        for origin in os.getenv("FRONTEND_ORIGINS", ",".join(default_origins)).split(",")
-        if origin.strip()
-    ],
-]
-configured_origins = list(dict.fromkeys(configured_origins))
-logger.info("FRONTEND_ORIGINS raw env: %s", os.getenv("FRONTEND_ORIGINS"))
+
+# Đọc từ env, nếu không có hoặc rỗng thì dùng default_origins
+raw_env = os.getenv("FRONTEND_ORIGINS", "")
+if raw_env.strip():
+    env_origins = [o.strip() for o in raw_env.split(",") if o.strip()]
+else:
+    env_origins = default_origins
+
+# Tổng hợp và gộp trùng lặp
+configured_origins = list(dict.fromkeys(["https://web-truyen-convert.vercel.app"] + env_origins))
+
 logger.info("CORS configured origins: %s", configured_origins)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins,
+    # Hỗ trợ thêm tất cả các domain Preview của Vercel (nếu có)
+    allow_origin_regex=r"https://web-truyen-convert.*\.vercel\.app", 
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-        "Accept",
-        "Origin",
-        "User-Agent",
-        "DNT",
-        "Cache-Control",
-        "X-Mx-ReqToken",
-        "Keep-Alive",
-        "X-Requested-With",
-        "If-Modified-Since",
-        "Accept-Encoding",
-        "Accept-Language",
-    ],
+    allow_methods=["*"],  # Nên dùng "*" để cho phép tất cả các HTTP method kể cả OPTIONS
+    allow_headers=["*"],  # Cho phép tất cả custom headers truyền lên từ client
+    expose_headers=["*"],
 )
 
 @app.get("/")
