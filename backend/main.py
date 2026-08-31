@@ -52,9 +52,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 default_origins = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://192.168.24.180:3000",
-    "http://192.168.16.1:3000",
     "https://web-truyen-convert.vercel.app",
 ]
 configured_origins = [
