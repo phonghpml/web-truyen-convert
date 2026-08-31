@@ -34,13 +34,16 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # 4. Copy toàn bộ code (cloakbrowser sẽ tự động download binary khi khởi tạo)
 COPY --chown=user . .
 
-# 5. Tải model NghiTTS từ Hugging Face trước khi build chạy để tránh đẩy file >10MB lên repo
-RUN mkdir -p /app/.nghitts-models && \
-    curl -L "https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochuyennew.onnx?download=true" -o /app/.nghitts-models/ngochuyennew.onnx && \
+# 5. Tạo thư mục model với quyền root, sau đó gán cho user để tránh lỗi Permission denied
+RUN mkdir -p /app/.nghitts-models && chown -R user:user /app/.nghitts-models
+
+# 6. Tải model NghiTTS từ Hugging Face trước khi build chạy để tránh đẩy file >10MB lên repo
+USER user
+RUN curl -L "https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochuyennew.onnx?download=true" -o /app/.nghitts-models/ngochuyennew.onnx && \
     curl -L "https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochuyennew.onnx.json?download=true" -o /app/.nghitts-models/ngochuyennew.onnx.json
 
-# 6. Sinh Prisma Client Python trước khi chạy ứng dụng
+# 7. Sinh Prisma Client Python trước khi chạy ứng dụng
 RUN python3 -m prisma py generate
 
-# 7. Chạy ứng dụng trên cổng 7860
+# 8. Chạy ứng dụng trên cổng 7860
 CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
