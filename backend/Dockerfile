@@ -35,6 +35,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 COPY --chown=user . .
 
 # 5. Tạo thư mục model với quyền root, sau đó gán cho user để tránh lỗi Permission denied
+USER root
 RUN mkdir -p /app/.nghitts-models && chown -R user:user /app/.nghitts-models
 
 # 6. Tải model NghiTTS từ Hugging Face trước khi build chạy để tránh đẩy file >10MB lên repo
