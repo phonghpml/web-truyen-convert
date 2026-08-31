@@ -58,14 +58,19 @@ default_origins = [
     "https://web-truyen-convert.vercel.app",
 ]
 configured_origins = [
-    origin.strip()
-    for origin in os.getenv("FRONTEND_ORIGINS", ",".join(default_origins)).split(",")
-    if origin.strip()
+    "https://web-truyen-convert.vercel.app",
+    *[
+        origin.strip()
+        for origin in os.getenv("FRONTEND_ORIGINS", ",".join(default_origins)).split(",")
+        if origin.strip()
+    ],
 ]
+configured_origins = list(dict.fromkeys(configured_origins))
+logger.info("FRONTEND_ORIGINS raw env: %s", os.getenv("FRONTEND_ORIGINS"))
+logger.info("CORS configured origins: %s", configured_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app$|http://localhost:\d+$|http://127\.0\.0\.1:\d+$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
