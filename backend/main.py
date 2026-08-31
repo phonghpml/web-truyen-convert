@@ -1021,5 +1021,5 @@ async def api_get_qidian_rank(
         }
 
     except Exception as e:
-        logger.exception(f"🔥 Lỗi nghiêm trọng tại API BXH Qidian: {e}")
+        logger.exception(f"🔥 Lỗi nghiêm trọng tại API BXH Qidian: {e} Test code")
         raise HTTPException(status_code=500, detail=str(e))
