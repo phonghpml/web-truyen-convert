@@ -17,69 +17,64 @@ async function proxy(request: NextRequest, params: { path?: string[] }) {
     method: request.method,
     headers: forwardedHeaders,
     redirect: 'follow',
-    export async function OPTIONS(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-      const origin = request.headers.get('origin') || undefined
-      // ensure signature matches Next's expected context typing
-      await context.params
-      return preflightResponse(origin)
-    }
+    // body handled below
+  }
 
-    export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-      const p = await context.params
-      return proxy(request, { path: p.path })
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    try {
+      const array = await request.arrayBuffer()
+      fetchInit.body = array
+    } catch (e) {
+      // ignore
     }
+  }
 
-    export async function POST(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-      const p = await context.params
-      return proxy(request, { path: p.path })
-    }
+  const res = await fetch(url, fetchInit)
 
-    export async function PUT(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-      const p = await context.params
-      return proxy(request, { path: p.path })
-    }
+  // Build NextResponse
+  const buf = await res.arrayBuffer()
+  const nextRes = new NextResponse(Buffer.from(buf), { status: res.status })
 
-    export async function PATCH(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-      const p = await context.params
-      return proxy(request, { path: p.path })
-    }
+  // copy headers
+  for (const [k, v] of res.headers.entries()) {
+    // let cookies pass through
+    nextRes.headers.set(k, v)
+  }
 
-    export async function DELETE(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-      const p = await context.params
-      return proxy(request, { path: p.path })
-    }
-export async function DELETE(request: NextRequest, { params }: { params: { path?: string[] } }) {
-  return proxy(request, params)
-=======
-export async function OPTIONS(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+  return nextRes
+}
+
+function preflightResponse(origin?: string) {
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization,Content-Type,Accept,Origin,User-Agent,DNT,Cache-Control,X-Mx-ReqToken,Keep-Alive,X-Requested-With,If-Modified-Since,Accept-Encoding,Accept-Language',
+    'Access-Control-Allow-Credentials': 'true',
+  }
+  if (origin) headers['Access-Control-Allow-Origin'] = origin
+  return new NextResponse(null, { status: 204, headers })
+}
+
+export async function OPTIONS(request: NextRequest, { params }: { params: { path?: string[] } }) {
   const origin = request.headers.get('origin') || undefined
-  // ensure signature matches Next's expected context typing
-  await context.params
   return preflightResponse(origin)
 }
 
-export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const p = await context.params
-  return proxy(request, { path: p.path })
+export async function GET(request: NextRequest, { params }: { params: { path?: string[] } }) {
+  return proxy(request, params)
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const p = await context.params
-  return proxy(request, { path: p.path })
+export async function POST(request: NextRequest, { params }: { params: { path?: string[] } }) {
+  return proxy(request, params)
 }
 
-export async function PUT(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const p = await context.params
-  return proxy(request, { path: p.path })
+export async function PUT(request: NextRequest, { params }: { params: { path?: string[] } }) {
+  return proxy(request, params)
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const p = await context.params
-  return proxy(request, { path: p.path })
+export async function PATCH(request: NextRequest, { params }: { params: { path?: string[] } }) {
+  return proxy(request, params)
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  const p = await context.params
-  return proxy(request, { path: p.path })
->>>>>>> 073ae26 (fix(frontend): adapt API route handler signatures to Next.js typing (await context.params))
+export async function DELETE(request: NextRequest, { params }: { params: { path?: string[] } }) {
+  return proxy(request, params)
 }
