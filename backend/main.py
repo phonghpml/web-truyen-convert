@@ -55,6 +55,7 @@ default_origins = [
     "http://127.0.0.1:3000",
     "http://192.168.24.180:3000",
     "http://192.168.16.1:3000",
+    "https://web-truyen-convert.vercel.app",
 ]
 configured_origins = [
     origin.strip()
@@ -64,9 +65,24 @@ configured_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app$|http://localhost:\d+$|http://127\.0\.0\.1:\d+$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "User-Agent", "DNT", "Cache-Control", "X-Mx-ReqToken", "Keep-Alive", "X-Requested-With", "If-Modified-Since", "Accept-Encoding", "Accept-Language"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "User-Agent",
+        "DNT",
+        "Cache-Control",
+        "X-Mx-ReqToken",
+        "Keep-Alive",
+        "X-Requested-With",
+        "If-Modified-Since",
+        "Accept-Encoding",
+        "Accept-Language",
+    ],
 )
 
 @app.get("/")
