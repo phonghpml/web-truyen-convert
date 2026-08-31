@@ -5,6 +5,9 @@ from typing import Optional
 import auth as auth_utils
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 import database as db_mod
 import scraper as scr
 import translator_utils as tr
@@ -68,6 +71,36 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "User-Agent", "DNT", "Cache-Control", "X-Mx-ReqToken", "Keep-Alive", "X-Requested-With", "If-Modified-Since", "Accept-Encoding", "Accept-Language"],
 )
+
+class PreflightMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        # Handle CORS preflight
+        if request.method == "OPTIONS":
+            headers = {
+                "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+                "Access-Control-Allow-Headers": ",".join([
+                    "Authorization","Content-Type","Accept","Origin","User-Agent","DNT",
+                    "Cache-Control","X-Mx-ReqToken","Keep-Alive","X-Requested-With",
+                    "If-Modified-Since","Accept-Encoding","Accept-Language"
+                ]),
+                "Access-Control-Allow-Credentials": "true",
+            }
+            if origin and origin in configured_origins:
+                headers["Access-Control-Allow-Origin"] = origin
+            else:
+                headers["Access-Control-Allow-Origin"] = ",".join(configured_origins) if configured_origins else "*"
+            return Response(status_code=204, headers=headers)
+
+        # For non-OPTIONS, forward request and ensure credentials header
+        response = await call_next(request)
+        if origin and origin in configured_origins:
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers.setdefault("Access-Control-Allow-Origin", origin)
+        return response
+
+
+app.add_middleware(PreflightMiddleware)
 
 @app.get("/")
 async def root():
