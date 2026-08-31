@@ -1,5 +1,10 @@
 // Environment constants
-export const CRAWLER_BASE_URL = (process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+const DEFAULT_CRAWLER_BASE_URL =
+  process.env.NODE_ENV === "production"
+    ? "/api"
+    : process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000";
+
+export const CRAWLER_BASE_URL = (process.env.NEXT_PUBLIC_CRAWLER_URL || DEFAULT_CRAWLER_BASE_URL).replace(/\/+$/, "");
 
 // API Endpoints
 export const ENDPOINTS = {
