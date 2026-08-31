@@ -19,16 +19,19 @@ jobs:
         run: |
           # 1. Đi vào thư mục backend
           cd backend
-          
-          # 2. Khởi tạo Git mới tại đây để xóa sạch lịch sử file > 10MB
+
+          # 2. Xóa model lớn khỏi repo trước khi push, vì HF chặn file > 10MB
+          rm -rf .nghitts-models
+
+          # 3. Khởi tạo Git mới tại đây để xóa sạch lịch sử file > 10MB
           git init
           git config user.email "phongphml@gmail.com"
           git config user.name "phongphml"
-          
-          # 3. Thêm toàn bộ file hiện tại (đã chia nhỏ < 10MB)
+
+          # 4. Thêm toàn bộ file hiện tại (đã chia nhỏ < 10MB)
           git add .
           git commit -m "Deploy clean version without large files"
-          
-          # 4. Ép buộc đẩy lên Hugging Face (Dùng -f)
+
+          # 5. Ép buộc đẩy lên Hugging Face (Dùng -f)
           # Lưu ý: nhánh mặc định của 'git init' thường là 'master', nên ta đẩy master:main
           git push -f https://Phonghp:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/Phonghp/crawler master:main
