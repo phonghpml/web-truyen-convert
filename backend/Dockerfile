@@ -34,9 +34,10 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # 4. Copy toàn bộ code (cloakbrowser sẽ tự động download binary khi khởi tạo)
 COPY --chown=user . .
 
-# 5. Tạo thư mục model với quyền root, sau đó gán cho user để tránh lỗi Permission denied
+# 5. Tạo thư mục writable cho app user để tránh lỗi Permission denied khi app khởi động
 USER root
-RUN mkdir -p /app/.nghitts-models && chown -R user:user /app/.nghitts-models
+RUN mkdir -p /app/static /app/static/uploads /app/static/videos /app/.nghitts-models && \
+    chown -R user:user /app/static /app/.nghitts-models
 
 # 6. Tải model NghiTTS từ Hugging Face trước khi build chạy để tránh đẩy file >10MB lên repo
 USER user
