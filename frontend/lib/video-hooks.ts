@@ -30,7 +30,7 @@ export async function createVideoFromBook(
 
 export async function fetchVideosByBookUrl(bookUrl: string) {
   try {
-    const response = await fetch(`${ENDPOINTS.VIDEOS}?book_url=${encodeURIComponent(bookUrl)}`);
+    const response = await authFetch(`${ENDPOINTS.VIDEOS}?book_url=${encodeURIComponent(bookUrl)}`);
     return await response.json();
   } catch (err) {
     console.error("Error fetching videos:", err);

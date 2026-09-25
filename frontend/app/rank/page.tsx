@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from "@/components/layout/Navbar";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
+import { authFetch } from "@/lib/auth";
 import { 
   Flame, 
   Zap, 
@@ -135,7 +136,7 @@ function RankContent() {
     const fetchRankData = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`${CRAWLER_BASE_URL}/get-qidian-rank?type=${currentType}&chn=${currentChn}&page=${currentPage}&year=${currentYear}&month=${currentMonth}`);
+        const res = await authFetch(`${CRAWLER_BASE_URL}/get-qidian-rank?type=${currentType}&chn=${currentChn}&page=${currentPage}&year=${currentYear}&month=${currentMonth}`);
         if (!res.ok) throw new Error('Network error');
         
         const jsonResult = await res.json();

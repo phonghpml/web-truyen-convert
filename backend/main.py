@@ -28,6 +28,7 @@ from routes.auth import router as auth_router
 from routes.user import router as user_router
 from routes.crawl import router as crawl_router, oauth_router, restore_jobs_from_db
 from routes.video import router as video_router
+from middleware.auth_gate import enforce_auth_middleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -80,6 +81,11 @@ app.add_middleware(
     allow_headers=["*"],  # Cho phép tất cả custom headers truyền lên từ client
     expose_headers=["*"],
 )
+
+# Global HTTP middleware to enforce login-first policy for non-public APIs.
+@app.middleware("http")
+async def _enforce_auth_middleware(request, call_next):
+    return await enforce_auth_middleware(request, call_next)
 
 @app.get("/")
 async def root():

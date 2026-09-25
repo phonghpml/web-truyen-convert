@@ -15,6 +15,21 @@ function safeParse(value: string | null) {
   }
 }
 
+async function parseJsonSafe(res: Response) {
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      return await res.json();
+    } catch (e) {
+      const raw = await res.text().catch(() => null);
+      return { success: false, error: "invalid_json", raw };
+    }
+  }
+
+  const raw = await res.text().catch(() => null);
+  return { success: false, error: "non_json_response", raw, status: res.status, ok: res.ok };
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(AUTH_TOKEN_KEY);
@@ -176,7 +191,7 @@ export async function refreshFromCookie() {
   refreshPromise = (async () => {
     try {
       const res = await fetch(ENDPOINTS.AUTH_REFRESH, { method: "POST", credentials: "include" });
-      const data = await res.json().catch(() => null);
+      const data = await parseJsonSafe(res).catch(() => null);
       const token = data?.success && data.data?.token;
       const user = data?.success && data.data?.user;
       if (!res.ok || typeof token !== "string" || !user) return null;
@@ -196,9 +211,11 @@ export async function refreshFromCookie() {
 
 export async function logout() {
   try {
+    const headers = buildAuthHeaders({}, null);
     await fetch(ENDPOINTS.AUTH_LOGOUT, {
       method: "POST",
       credentials: "include",
+      headers,
     });
   } finally {
     clearAuth();
@@ -212,8 +229,7 @@ export async function register(email: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-
-  return response.json();
+  return parseJsonSafe(response);
 }
 
 export async function login(email: string, password: string) {
@@ -223,20 +239,19 @@ export async function login(email: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-
-  return response.json();
+  return parseJsonSafe(response);
 }
 
 export async function fetchMe() {
   const response = await authFetch(ENDPOINTS.AUTH_ME, { method: "GET" });
-  return response.json();
+  return parseJsonSafe(response);
 }
 
 export async function getReadingHistory(book_url: string) {
   const response = await authFetch(`${ENDPOINTS.USER_HISTORY}?book_url=${encodeURIComponent(book_url)}`, {
     method: "GET",
   });
-  return response.json() as Promise<ApiResponse<ReadingHistory>>;
+  return (await parseJsonSafe(response)) as Promise<ApiResponse<ReadingHistory>>;
 }
 
 export async function saveReadingHistory(payload: {
@@ -249,14 +264,14 @@ export async function saveReadingHistory(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return response.json();
+  return parseJsonSafe(response);
 }
 
 export async function getLibraryStatus(book_url: string) {
   const response = await authFetch(`${ENDPOINTS.USER_LIBRARY}?book_url=${encodeURIComponent(book_url)}`, {
     method: "GET",
   });
-  return response.json() as Promise<LibraryStatusResponse>;
+  return (await parseJsonSafe(response)) as Promise<LibraryStatusResponse>;
 }
 
 export async function toggleLibrary(payload: {
@@ -268,12 +283,12 @@ export async function toggleLibrary(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return response.json();
+  return parseJsonSafe(response);
 }
 
 export async function getLibraryList() {
   const response = await authFetch(ENDPOINTS.USER_LIBRARY_LIST, {
     method: "GET",
   });
-  return response.json();
+  return parseJsonSafe(response);
 }

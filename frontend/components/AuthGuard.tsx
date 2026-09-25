@@ -4,8 +4,9 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/useAuth";
 
-// Routes that don't require authentication
-const PUBLIC_ROUTE_PREFIXES = ["/", "/login", "/register", "/rank", "/search", "/book"];
+// Only authentication entry pages remain public.
+// The app requires login-first access for every other route.
+const PUBLIC_ROUTE_PREFIXES = ["/login", "/register"];
 
 function isPublicRoute(pathname: string) {
   return PUBLIC_ROUTE_PREFIXES.some((prefix) => {
@@ -24,15 +25,26 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isPublic && !isLoading && !user) {
-      router.push("/login");
+      const redirectTarget = `/login?next=${encodeURIComponent(pathname || "/")}`;
+      router.replace(redirectTarget);
     }
-  }, [isPublic, isLoading, user, router]);
+  }, [isPublic, isLoading, user, router, pathname]);
 
   if (!isPublic && isLoading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
           <p className="text-zinc-400 text-sm animate-pulse">Đang kiểm tra xác thực...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isPublic && !user) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-zinc-400 text-sm animate-pulse">Đang chuyển tới trang đăng nhập...</p>
         </div>
       </div>
     );

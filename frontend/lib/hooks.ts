@@ -33,7 +33,7 @@ export function useFetch<T>(
       const fetchData = async () => {
         try {
           setState((prev) => ({ ...prev, loading: true, error: null }));
-          const response = await fetch(url, options);
+          const response = await authFetch(url, options);
           const result: ApiResponse<T> = await response.json();
 
           if (result.success && result.data) {
@@ -82,7 +82,7 @@ export async function fetchBook(
     const decodedSlug = decodeURIComponent(slug);
 
     // Try by source_url first
-    let response = await fetch(
+    let response = await authFetch(
       `${ENDPOINTS.BOOKS}?slug=${encodeURIComponent(decodedSlug)}`
     );
     let data: ApiResponse<Book[]> = await response.json();
@@ -92,7 +92,7 @@ export async function fetchBook(
     }
 
     // Try by _id
-    response = await fetch(
+    response = await authFetch(
       `${ENDPOINTS.BOOKS}?id=${encodeURIComponent(decodedSlug)}`
     );
     data = await response.json();
@@ -102,7 +102,7 @@ export async function fetchBook(
     }
 
     // Try by source_url in case the slug is actually an encoded external URL
-    response = await fetch(
+    response = await authFetch(
       `${ENDPOINTS.BOOKS}?source_url=${encodeURIComponent(decodedSlug)}`
     );
     data = await response.json();
@@ -125,7 +125,7 @@ export async function fetchChapters(
   sourceUrl: string
 ): Promise<{ chapters: Chapter[]; error: string | null }> {
   try {
-    const response = await fetch(
+    const response = await authFetch(
       `${ENDPOINTS.CHAPTERS}?book=${encodeURIComponent(sourceUrl)}`
     );
     const data: ApiResponse<Chapter[]> = await response.json();
@@ -145,7 +145,7 @@ export async function fetchBookVideos(
   sourceUrl: string
 ): Promise<{ videos: Video[]; error: string | null }> {
   try {
-    const response = await fetch(
+    const response = await authFetch(
       `${ENDPOINTS.VIDEOS}?book_url=${encodeURIComponent(sourceUrl)}`
     );
     const data: ApiResponse<Video[]> = await response.json();
@@ -192,7 +192,14 @@ export async function publishVideoToYouTube(videoId: string) {
     const response = await authFetch(url.toString(), {
       method: "POST",
     });
-    return await response.json();
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = data?.detail || data?.message || data?.error || MESSAGES.ERROR;
+      return { success: false, error: detail, data: data?.data ?? null };
+    }
+
+    return data;
   } catch (err) {
     console.error("Error publishing video to YouTube:", err);
     return { success: false, error: MESSAGES.ERROR };
@@ -206,7 +213,7 @@ export async function searchBooks(
   query: string
 ): Promise<{ books: Book[]; error: string | null }> {
   try {
-    const response = await fetch(
+    const response = await authFetch(
       `${ENDPOINTS.BOOKS_SEARCH}?q=${encodeURIComponent(query)}`
     );
     const data: ApiResponse<Book[]> = await response.json();
@@ -227,7 +234,7 @@ export async function searchBooks(
  */
 export async function getCrawlerInfo(url: string) {
   try {
-    const response = await fetch(ENDPOINTS.CRAWLER_INFO, {
+    const response = await authFetch(ENDPOINTS.CRAWLER_INFO, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
@@ -244,7 +251,7 @@ export async function getCrawlerInfo(url: string) {
  */
 export async function getCrawlerChapters(url: string) {
   try {
-    const response = await fetch(ENDPOINTS.CRAWLER_CHAPTERS, {
+    const response = await authFetch(ENDPOINTS.CRAWLER_CHAPTERS, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),

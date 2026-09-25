@@ -7,6 +7,7 @@ import { ChapterList } from "@/components/ui/ChapterList";
 import { MESSAGES } from "@/lib/constants";
 import { fetchBook, fetchChapters, fetchBookVideos } from "@/lib/hooks";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
+import { authFetch } from "@/lib/auth";
 import { ApiResponse, Book, Chapter, LibraryStatusResponse, ReadingHistory, Video } from "@/lib/types";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -103,7 +104,7 @@ export default function BookDetailsPage() {
     if (!book?.source_url) return;
     setIsUpdating(true);
     try {
-      const response = await fetch(`${CRAWLER_BASE_URL}/get-chapters`, {
+      const response = await authFetch(`${CRAWLER_BASE_URL}/get-chapters`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: book.source_url })

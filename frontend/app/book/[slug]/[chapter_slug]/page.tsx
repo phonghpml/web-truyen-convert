@@ -7,6 +7,7 @@ import {
   Square, SkipForward, SkipBack, Gauge, User
 } from "lucide-react";
 import { CRAWLER_BASE_URL } from "@/lib/constants";
+import { authFetch } from "@/lib/auth";
 import { Chapter } from "@/lib/types";
 import { Navbar } from "@/components/layout/Navbar";
 
@@ -82,7 +83,7 @@ export default function ChapterPage() {
     setLoading(true);
     clearBlobCache();
     try {
-      const res = await fetch(`${CRAWLER_BASE_URL}/get-chapter-content`, {
+      const res = await authFetch(`${CRAWLER_BASE_URL}/get-chapter-content`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: targetUrl }),
@@ -118,13 +119,13 @@ export default function ChapterPage() {
         if (!slug) return;
 
         // Fetch book to get source_url
-        const bookRes = await fetch(`${CRAWLER_BASE_URL}/books?slug=${encodeURIComponent(slug)}`);
+        const bookRes = await authFetch(`${CRAWLER_BASE_URL}/books?slug=${encodeURIComponent(slug)}`);
         const bookJson = await bookRes.json();
         if (!bookJson?.success || !bookJson?.data || bookJson.data.length === 0) return;
         const source = bookJson.data[0].source_url;
         if (!source) return;
 
-        const chRes = await fetch(`${CRAWLER_BASE_URL}/chapters?book=${encodeURIComponent(source)}`);
+        const chRes = await authFetch(`${CRAWLER_BASE_URL}/chapters?book=${encodeURIComponent(source)}`);
         const chJson = await chRes.json();
         if (chJson?.success && Array.isArray(chJson.data)) {
           syncChapterTitle(chJson.data);
@@ -156,7 +157,7 @@ export default function ChapterPage() {
     loadingTasks.current.add(index);
     try {
       const text = encodeURIComponent(paragraphs[index]);
-      const response = await fetch(`${CRAWLER_BASE_URL}/stream-chapter-audio?text=${text}&rate=${encodeURIComponent(speed)}&voice=${voice}`);
+      const response = await authFetch(`${CRAWLER_BASE_URL}/stream-chapter-audio?text=${text}&rate=${encodeURIComponent(speed)}&voice=${voice}`);
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
         throw new Error(`Audio request failed for paragraph ${index}: ${response.status} ${errText.slice(0, 200)}`);

@@ -11,11 +11,13 @@ export function useAuth() {
   useEffect(() => {
     const updateUser = async () => {
       try {
-        const stored = getStoredUser();
         const token = getAuthToken();
+        const hasSession = Boolean(token || hasRefreshCookie());
 
-        if (!token && !hasRefreshCookie()) {
-          setUser(stored ?? null);
+        if (!hasSession) {
+          clearAuth();
+          setUser(null);
+          dispatchAuthChange();
           return;
         }
 
@@ -31,7 +33,9 @@ export function useAuth() {
             return;
           }
 
-          setUser(stored ?? null);
+          clearAuth();
+          setUser(null);
+          dispatchAuthChange();
           return;
         }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { CrawlVideoList } from "@/components/features/CrawlVideoList";
@@ -41,6 +41,7 @@ export default function AdminVideosPage() {
   const [videoVoice, setVideoVoice] = useState<string>("nghitts:ngochuyennew");
   const [videoRate, setVideoRate] = useState<string>("+0%");
   const [bulkOrder, setBulkOrder] = useState<string>("created_desc");
+  const youtubeAuthPromptedRef = useRef(false);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const openCreateModal = useCallback(() => setShowCreateModal(true), []);
@@ -160,16 +161,20 @@ export default function AdminVideosPage() {
     setVideosSuccess(null);
     try {
       const result = await publishVideoToYouTube(videoId);
+      if (result?.data?.auth_url) {
+        if (!youtubeAuthPromptedRef.current) {
+          window.open(result.data.auth_url, "_blank");
+          youtubeAuthPromptedRef.current = true;
+        }
+        setVideosSuccess(result.data.message || "Google YouTube đang cần xác thực lại. Vui lòng hoàn tất tab xác thực đã mở.");
+        return;
+      }
+      youtubeAuthPromptedRef.current = false;
       if (!result.success) {
         setVideosError(result.error || "Lỗi khi đăng video lên YouTube");
         return;
       }
-      if (result.data?.auth_url) {
-        window.open(result.data.auth_url, "_blank");
-        setVideosSuccess("Đã mở Google OAuth trong tab mới. Sau khi xác thực, hãy thử lại.");
-      } else {
-        setVideosSuccess("Yêu cầu đăng video đã được gửi.");
-      }
+      setVideosSuccess("Yêu cầu đăng video đã được gửi.");
       await loadVideosForJobs();
     } catch (err) {
       console.error(err);
@@ -260,12 +265,32 @@ export default function AdminVideosPage() {
       const ordered = sortSelectedIds(selectedVideoIds);
       let successCount = 0;
       let failureCount = 0;
+      let pendingAuthUrl: string | null = null;
+      let pendingAuthMessage: string | null = null;
+
       for (const videoId of ordered) {
         const result = await publishVideoToYouTube(videoId);
         if (result.success) successCount += 1;
         else failureCount += 1;
-        if (result.data?.auth_url) window.open(result.data.auth_url, "_blank");
+
+        if (result.data?.auth_url && !pendingAuthUrl) {
+          pendingAuthUrl = result.data.auth_url;
+          pendingAuthMessage = result.data.message || "Google YouTube đang cần xác thực lại. Vui lòng hoàn tất tab xác thực đã mở.";
+          if (!youtubeAuthPromptedRef.current) {
+            window.open(result.data.auth_url, "_blank");
+            youtubeAuthPromptedRef.current = true;
+          }
+          break;
+        }
       }
+
+      if (pendingAuthUrl) {
+        setVideosSuccess(pendingAuthMessage || "Google YouTube đang cần xác thực lại. Vui lòng hoàn tất tab xác thực đã mở.");
+        setSelectedVideoIds([]);
+        return;
+      }
+
+      youtubeAuthPromptedRef.current = false;
       if (failureCount) {
         setVideosError(`${failureCount}/${selectedVideoIds.length} video đăng không thành công.`);
       } else {

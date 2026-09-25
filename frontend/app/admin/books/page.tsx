@@ -68,7 +68,7 @@ export default function AdminBooksPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${ENDPOINTS.BOOKS}?limit=200`);
+      const response = await authFetch(`${ENDPOINTS.BOOKS}?limit=200`);
       const result = await response.json();
       if (result.success && Array.isArray(result.data)) {
         setBooks(result.data.map((book: Book) => ({ ...book, selected: false })));

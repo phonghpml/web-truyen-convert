@@ -3,10 +3,12 @@ from typing import Optional
 from uuid import uuid4
 import logging
 
+import requests
+
 import database as db_mod
 from services.video_service import create_video_from_source_url
 from services.video_download import download_remote_video
-from services.youtube_token_store import get_refresh_token
+from services.youtube_token_store import get_refresh_token, clear_refresh_token
 from services.youtube_video_upload import upload_video_to_youtube
 from services.youtube_uploader import build_oauth_authorization_url, refresh_access_token
 from supabase_storage import delete_file_from_supabase_storage
@@ -96,8 +98,8 @@ async def create_video(
     )
 
 
-@router.get("")
-@router.get("/")
+@router.get("", dependencies=[Depends(auth_utils.get_current_admin_user)])
+@router.get("/", dependencies=[Depends(auth_utils.get_current_admin_user)])
 async def list_videos(book_url: Optional[str] = None):
     if book_url:
         normalized_book_url = normalize_source_url(book_url)
@@ -178,7 +180,25 @@ async def publish_video_to_youtube(video_id: str):
             },
         }
 
-    token_response = refresh_access_token(refresh_token)
+    try:
+        token_response = refresh_access_token(refresh_token)
+    except (ValueError, requests.RequestException) as exc:
+        body = exc.response.text if getattr(exc, "response", None) is not None else ""
+        logger.exception("Failed to refresh YouTube token for video_id=%s | body=%s", video_id, body)
+        if "invalid_grant" in str(body).lower() or "expired or revoked" in str(body).lower():
+            try:
+                clear_refresh_token()
+            except Exception:
+                logger.exception("Failed to clear expired YouTube refresh token for video_id=%s", video_id)
+            return {
+                "success": True,
+                "data": {
+                    "message": "Google YouTube OAuth đã hết hạn hoặc bị thu hồi. Vui lòng xác thực lại tài khoản Google để đăng video.",
+                    "auth_url": build_oauth_authorization_url(state=video_id),
+                },
+            }
+        raise HTTPException(status_code=502, detail="Không thể xác thực với Google YouTube") from exc
+
     access_token = token_response.get("access_token")
     if not access_token:
         raise HTTPException(status_code=400, detail="Không thể lấy access token từ Google")
@@ -213,18 +233,29 @@ async def publish_video_to_youtube(video_id: str):
 
     try:
         if isinstance(video_url, str) and video_url.startswith("http"):
-            downloaded_path = await __import__("asyncio").to_thread(download_remote_video, video_url, str(temp_video_path))
+            try:
+                downloaded_path = await __import__("asyncio").to_thread(download_remote_video, video_url, str(temp_video_path))
+            except Exception as exc:
+                logger.exception("Failed to download video for YouTube upload | video_id=%s url=%s", video_id, video_url)
+                raise HTTPException(status_code=502, detail="Không tải được video từ URL để đăng lên YouTube") from exc
         else:
             raise HTTPException(status_code=400, detail="Video URL không hợp lệ để tải xuống")
 
-        upload_result = await __import__("asyncio").to_thread(
-            upload_video_to_youtube,
-            access_token,
-            video_title,
-            video_description,
-            video_tags,
-            downloaded_path,
-        )
+        try:
+            upload_result = await __import__("asyncio").to_thread(
+                upload_video_to_youtube,
+                access_token,
+                video_title,
+                video_description,
+                video_tags,
+                downloaded_path,
+            )
+        except (ValueError, requests.RequestException) as exc:
+            logger.exception("Failed to upload video to YouTube | video_id=%s", video_id)
+            raise HTTPException(status_code=502, detail="Không thể đăng video lên YouTube") from exc
+
+        if not isinstance(upload_result, dict):
+            raise HTTPException(status_code=502, detail="Google trả về phản hồi không hợp lệ khi đăng video")
 
         youtube_video_id = upload_result.get("id") or upload_result.get("videoId")
         try:
