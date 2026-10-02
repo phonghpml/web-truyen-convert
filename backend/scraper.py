@@ -4,6 +4,7 @@ import html
 import logging
 import os
 import re
+import tempfile
 import time
 import urllib.parse
 from pathlib import Path
@@ -18,6 +19,36 @@ _browser_lock = asyncio.Lock()
 PAGE_CLOSE_DELAY_SECONDS = 0
 STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS = 10
 STV_PROFILE_DIR = Path(__file__).resolve().parent / "browser_profiles" / "stv"
+
+
+def _debug_artifact_path(filename: str) -> Path:
+    debug_dir = Path(tempfile.gettempdir()) / "web-truyen-convert-debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    return debug_dir / filename
+
+
+async def _save_debug_screenshot(page, filename: str, **options) -> bool:
+    logger = logging.getLogger(__name__)
+    try:
+        path = _debug_artifact_path(filename)
+        await page.screenshot(path=str(path), **options)
+        logger.info("Đã lưu screenshot debug: %s", path)
+        return True
+    except Exception as exc:
+        logger.warning("Không lưu được screenshot debug %s: %s", filename, exc)
+        return False
+
+
+async def _save_debug_html(page, filename: str) -> bool:
+    logger = logging.getLogger(__name__)
+    try:
+        path = _debug_artifact_path(filename)
+        path.write_text(await page.content(), encoding="utf-8")
+        logger.info("Đã lưu HTML debug: %s", path)
+        return True
+    except Exception as exc:
+        logger.warning("Không lưu được HTML debug %s: %s", filename, exc)
+        return False
 
 
 def is_stv_persistent_profile_enabled() -> bool:
@@ -199,7 +230,7 @@ async def scrape_chapter_content(url: str):
         return content.strip() if content else None
     except Exception as e:
         # Chụp ảnh lỗi để soi xem nó hiện thông báo gì (Captcha hay Cloudflare)
-        await page.screenshot(path="debug_logs/error_debug.png")
+        await _save_debug_screenshot(page, "error_debug.png")
         logging.getLogger(__name__).exception(f"❌ Lỗi Scrape Content: {str(e)}")
         return None
     finally:
@@ -285,20 +316,15 @@ async def scrape_stv_chapters(url: str):
             })).filter(c => c.title_vi !== "");
         }''')
     except Exception as e:
-        screenshot_path = f"debug_logs/stv_chapters_error_{int(time.time())}.png"
-        html_path = f"debug_logs/stv_chapters_error_{int(time.time())}.html"
-        try:
-            await page.screenshot(path=screenshot_path, timeout=120000, full_page=False)
-            logging.getLogger(__name__).warning(f"❌ Đã chụp screenshot lỗi STV Chapters: {screenshot_path}")
-        except Exception as screenshot_exc:
-            logging.getLogger(__name__).warning(f"⚠️ Không chụp được screenshot lỗi STV Chapters: {screenshot_exc}")
-            try:
-                html_content = await page.content()
-                with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(html_content)
-                logging.getLogger(__name__).warning(f"📄 Đã lưu HTML lỗi STV Chapters: {html_path}")
-            except Exception as html_exc:
-                logging.getLogger(__name__).exception(f"⚠️ Không lưu được HTML lỗi STV Chapters: {html_exc}")
+        artifact_id = int(time.time())
+        screenshot_saved = await _save_debug_screenshot(
+            page,
+            f"stv_chapters_error_{artifact_id}.png",
+            timeout=120000,
+            full_page=False,
+        )
+        if not screenshot_saved:
+            await _save_debug_html(page, f"stv_chapters_error_{artifact_id}.html")
         logging.getLogger(__name__).exception(f"❌ Lỗi STV Chapters: {e}")
         return []
     finally:
@@ -400,10 +426,18 @@ async def scrape_stv_chapter_content(url: str):
                         f"✅ [SUCCESS] Đã bắt đúng API chương {target_chap_id} | length={len(data_json['data'])} | url={res_url}"
                     )
                 else:
-                    logging.getLogger(__name__).warning(
-                        f"⚠️ [API DATA] API trả về code={data_json.get('code')} hoặc không có data | url={res_url}"
+                    response_message = (
+                        data_json.get("message")
+                        or data_json.get("msg")
+                        or data_json.get("error")
                     )
-                    logging.getLogger(__name__).debug(f"[API DATA] JSON payload: {data_json}")
+                    logging.getLogger(__name__).warning(
+                        "[API DATA] STV readchapter returned code=%s, data_present=%s, message=%s | url=%s",
+                        data_json.get("code"),
+                        bool(data_json.get("data")),
+                        str(response_message)[:300] if response_message is not None else "<none>",
+                        res_url,
+                    )
             else:
                 logging.getLogger(__name__).debug(f"⏭️ [SKIP] Bỏ qua API không khớp ID: {res_url}")
 
@@ -463,9 +497,7 @@ async def scrape_stv_chapter_content(url: str):
 
         if not found:
             logging.getLogger(__name__).warning(f"❌ [TIMEOUT] Không bắt được dữ liệu cho chương {target_chap_id}")
-            screenshot_path = f"debug_logs/debug_{target_chap_id}_2_timeout.png"
-            await page.screenshot(path=screenshot_path)
-            logging.getLogger(__name__).warning(f"❌ [TIMEOUT] Đã chụp screenshot: {screenshot_path}")
+            await _save_debug_screenshot(page, f"debug_{target_chap_id}_2_timeout.png")
             return None
 
         logging.getLogger(__name__).debug(f"Step 6: Bóc tách nội dung (Nguồn: {source_type})...")
@@ -479,20 +511,15 @@ async def scrape_stv_chapter_content(url: str):
 
     except Exception as e:
         logging.getLogger(__name__).exception(f"🔥 [CRASH] Lỗi Scraper: {str(e)}")
-        screenshot_path = f"debug_logs/debug_{target_chap_id}_crash_{int(time.time())}.png"
-        html_path = f"debug_logs/debug_{target_chap_id}_crash_{int(time.time())}.html"
-        try:
-            await page.screenshot(path=screenshot_path, timeout=120000, full_page=False)
-            logging.getLogger(__name__).warning(f"🔥 [CRASH] Đã chụp screenshot: {screenshot_path}")
-        except Exception as screenshot_exc:
-            logging.getLogger(__name__).warning(f"⚠️ Không chụp được screenshot crash: {screenshot_exc}")
-            try:
-                html_content = await page.content()
-                with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(html_content)
-                logging.getLogger(__name__).warning(f"📄 Đã lưu HTML crash: {html_path}")
-            except Exception as html_exc:
-                logging.getLogger(__name__).exception(f"⚠️ Không lưu được HTML crash: {html_exc}")
+        artifact_id = int(time.time())
+        screenshot_saved = await _save_debug_screenshot(
+            page,
+            f"debug_{target_chap_id}_crash_{artifact_id}.png",
+            timeout=120000,
+            full_page=False,
+        )
+        if not screenshot_saved:
+            await _save_debug_html(page, f"debug_{target_chap_id}_crash_{artifact_id}.html")
         return None
     finally:
         logger = logging.getLogger(__name__)
