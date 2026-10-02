@@ -3,11 +3,14 @@
 
 import { AuthGuard } from "./AuthGuard";
 import { ToastProvider } from "./ui/ToastProvider";
+import { ManagementSidebar } from "./layout/ManagementSidebar";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
-      <AuthGuard>{children}</AuthGuard>
+      <AuthGuard>
+        <ManagementSidebar>{children}</ManagementSidebar>
+      </AuthGuard>
     </ToastProvider>
   );
 }

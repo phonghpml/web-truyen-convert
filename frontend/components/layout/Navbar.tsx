@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bookmark, LogOut, User, Home, Loader2, ChevronDown, Settings, Trophy, Download } from "lucide-react";
+import { Bookmark, LogOut, User, Home, Loader2, ChevronDown, Settings, Trophy, Menu } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useState, useRef, useEffect } from "react";
+import { useManagementSidebar } from "./ManagementSidebar";
 
 interface NavbarProps {
   onHomeClick?: () => void;
@@ -14,9 +15,11 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isLoading, signOut } = useAuth();
+  const managementSidebar = useManagementSidebar();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isAdmin = !isLoading && user?.role === "admin";
+  const hasSidebar = isAdmin || pathname === "/rank" || pathname === "/crawl" || pathname.startsWith("/admin/");
 
   const displayName = !isLoading ? (user?.name || user?.email?.split('@')[0] || "Guest") : "Guest";
 
@@ -31,9 +34,20 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
   }, []);
 
   return (
-    <nav className="flex justify-between items-center mb-6 md:mb-8 border-b border-zinc-800 pb-4 pt-2 sticky top-0 bg-black/80 backdrop-blur-md z-50 px-4 max-w-6xl mx-auto w-full">
+    <nav className="sticky top-0 z-50 mx-auto mb-6 flex w-full max-w-6xl items-center justify-between border-b border-zinc-800 bg-black/80 px-4 pb-4 pt-2 backdrop-blur-md md:mb-8">
       {/* 1. LOGO */}
       <div className="flex items-center gap-4 md:gap-8">
+        {hasSidebar && managementSidebar && (
+          <button
+            type="button"
+            onClick={managementSidebar.toggleMobileMenu}
+            aria-expanded={managementSidebar.mobileOpen}
+            aria-label={managementSidebar.mobileOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-zinc-300 transition hover:bg-zinc-900 hover:text-white lg:hidden"
+          >
+            <Menu size={19} />
+          </button>
+        )}
         <button 
           onClick={() => { onHomeClick?.(); router.push("/"); }} 
           className="flex items-center gap-2 group transition-all duration-300"
@@ -47,52 +61,14 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
         </button>
 
         {/* NÚT ĐIỀU HƯỚNG SANG TRANG RANK (MỚI BỔ SUNG) */}
-        <Link
-          href="/rank"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all ${
-            pathname === "/rank"
-              ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-          }`}
-        >
-          <Trophy size={13} className={pathname === "/rank" ? "animate-pulse" : ""} />
-          <span className="hidden sm:inline">Xếp Hạng</span>
-        </Link>
-        {isAdmin && (
-          <div className="hidden md:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1">
-            <span className="text-[10px] uppercase tracking-[0.18em] text-orange-400">Admin</span>
-            <Link
-              href="/crawl"
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tight transition-all ${
-                pathname === "/crawl"
-                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-              }`}
-            >
-              <Download size={12} className={pathname === "/crawl" ? "animate-pulse" : ""} />
-              <span className="hidden lg:inline">Cào Truyện</span>
-            </Link>
-            <Link
-              href="/admin/books"
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tight transition-all ${
-                pathname.startsWith("/admin/books")
-                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-              }`}
-            >
-              <span className="hidden lg:inline">Quản lý sách</span>
-            </Link>
-            <Link
-              href="/admin/videos"
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tight transition-all ${
-                pathname === "/admin/videos"
-                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-              }`}
-            >
-              <span className="hidden lg:inline">Quản lý video</span>
-            </Link>
-          </div>
+        {!hasSidebar && (
+          <Link
+            href="/rank"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-black uppercase tracking-tight text-zinc-400 transition-all hover:bg-zinc-900 hover:text-white"
+          >
+            <Trophy size={13} />
+            <span className="hidden sm:inline">Xếp Hạng</span>
+          </Link>
         )}
       </div>
 
