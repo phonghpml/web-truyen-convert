@@ -15,16 +15,16 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white font-mono p-6">
+    <main className="min-h-screen bg-black p-4 font-mono text-white sm:p-6">
       <div className="max-w-5xl mx-auto">
 
 <Navbar onHomeClick={handleHomeClick} />
 
-        <div className="text-center mt-20">
-          <h2 className="text-6xl font-black mb-2 italic tracking-tighter uppercase">
+        <div className="mt-12 text-center sm:mt-16 md:mt-20">
+          <h2 className="mb-2 break-words text-4xl font-black italic uppercase tracking-tighter sm:text-5xl md:text-6xl">
             Đọc Truyện Free
           </h2>
-          <p className="text-gray-600 mb-12 text-[10px] tracking-[0.3em] uppercase">
+          <p className="mb-8 text-[10px] uppercase tracking-[0.16em] text-gray-600 sm:mb-12 sm:tracking-[0.3em]">
             Hệ thống tự động convert Vietphrase
           </p>
 
@@ -39,7 +39,7 @@ export default function Home() {
 
         {/* Chỉ hiện danh sách truyện khi không ở chế độ Convert/Search */}
         {!isSearching && (
-          <div className="mt-20">
+          <div className="mt-12 sm:mt-20">
             <BooksDisplay />
           </div>
         )}

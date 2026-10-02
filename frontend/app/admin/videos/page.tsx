@@ -390,8 +390,8 @@ export default function AdminVideosPage() {
     <div className="min-h-screen bg-black text-white px-4 py-8">
       <Navbar />
       {showCreateModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-3xl rounded-3xl border border-zinc-800 bg-[#0b0b0b] p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-3 sm:items-center sm:p-4">
+          <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto rounded-2xl border border-zinc-800 bg-[#0b0b0b] p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-white">Tạo video mới</h3>

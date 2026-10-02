@@ -63,16 +63,16 @@ export default function SearchPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white font-mono p-6">
+    <main className="min-h-screen bg-black p-4 font-mono text-white sm:p-6">
       <div className="max-w-5xl mx-auto">
         <Navbar onHomeClick={handleHome} />
 
-        <div className="mt-12">
-          <h2 className="text-3xl font-black mb-2 italic tracking-tighter">
+        <div className="mt-8 sm:mt-12">
+          <h2 className="mb-2 text-2xl font-black italic tracking-tighter sm:text-3xl">
             Kết Quả Tìm Kiếm
           </h2>
           <p className="text-gray-500 text-sm mb-8">
-            Từ khóa: <span className="text-orange-400">{decodeBookId(query)}</span>
+            Từ khóa: <span className="break-all text-orange-400">{decodeBookId(query)}</span>
           </p>
 
           {loading && <LoadingState message={MESSAGES.SEARCH_LOADING} />}

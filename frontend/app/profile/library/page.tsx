@@ -62,14 +62,14 @@ export default function LibraryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white font-mono p-6">
+    <main className="min-h-screen bg-black p-4 font-mono text-white sm:p-6">
       <div className="max-w-6xl mx-auto">
         <Navbar onHomeClick={() => window.location.href="/"} />
 
-        <header className="mt-20 mb-12 flex justify-between items-end border-b border-gray-900 pb-6">
-          <div className="border-l-4 border-orange-600 pl-6">
-            <h1 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Tủ Sách</h1>
-            <p className="text-[10px] text-gray-600 mt-2 tracking-[0.3em] uppercase">Kho lưu trữ cá nhân</p>
+        <header className="mt-10 mb-8 flex flex-col items-start justify-between gap-4 border-b border-gray-900 pb-5 sm:mt-16 sm:mb-12 sm:flex-row sm:items-end sm:pb-6">
+          <div className="min-w-0 border-l-4 border-orange-600 pl-4 sm:pl-6">
+            <h1 className="break-words text-3xl font-black uppercase italic leading-none tracking-tighter sm:text-4xl md:text-5xl">Tủ Sách</h1>
+            <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-gray-600 sm:tracking-[0.3em]">Kho lưu trữ cá nhân</p>
           </div>
           <div className="text-right">
             <span className="text-orange-500 font-black text-2xl">{books.length}</span>
@@ -89,7 +89,7 @@ export default function LibraryPage() {
             <Link href="/" className="mt-6 inline-block text-orange-500 text-[10px] font-bold border-b border-orange-500 pb-1 hover:text-white hover:border-white transition-all">KHÁM PHÁ NGAY</Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 md:grid-cols-4 lg:grid-cols-5 lg:gap-8">
             {books.map((book) => (
               <div key={book.book_url || book.id} className="group relative flex flex-col">
                 {/* Ảnh bìa & Nút Xóa */}
@@ -104,7 +104,7 @@ export default function LibraryPage() {
                   {/* Nút Xóa nhanh */}
                   <button 
                     onClick={() => handleRemove(book)}
-                    className="absolute top-2 right-2 p-2 bg-black/80 text-gray-500 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0"
+                    className="absolute right-2 top-2 translate-y-0 rounded-full bg-black/80 p-2 text-gray-300 opacity-100 transition-all hover:text-red-500 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100"
                   title="Xóa khỏi tủ sách">
                     <Trash2 size={16} />
                   </button>

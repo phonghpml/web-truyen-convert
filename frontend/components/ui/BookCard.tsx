@@ -15,16 +15,16 @@ export const BookCard = ({ data, savedHistory,
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="bg-gray-950 border border-orange-500/10 p-4 md:p-6 rounded-3xl flex flex-row gap-4 md:gap-8 text-left animate-in fade-in zoom-in duration-500 shadow-2xl items-start">
+    <div className="flex flex-col items-stretch gap-4 rounded-3xl border border-orange-500/10 bg-gray-950 p-4 text-left shadow-2xl animate-in fade-in zoom-in duration-500 sm:flex-row sm:items-start md:gap-8 md:p-6">
       
       {/* 1. Phần ảnh: Xử lý lỗi src rỗng và link die */}
-      <div className="relative group shrink-0 sticky top-0">
+      <div className="relative group mx-auto shrink-0 sm:mx-0">
         <div className="absolute -inset-1 bg-orange-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           // SỬA LỖI: Nếu src rỗng thì dùng DEFAULT_COVER để tránh download whole page
           src={data.cover_url || DEFAULT_COVER}
-          className="relative w-24 h-36 md:w-40 md:h-56 object-cover rounded-lg border border-gray-800 shadow-2xl transition-all"
+          className="relative h-40 w-28 rounded-lg border border-gray-800 object-cover shadow-2xl transition-all sm:h-48 sm:w-32 md:h-56 md:w-40"
           alt={data.title_vi || "book cover"}
           // SỬA LỖI: Nếu link ảnh bị lỗi 404, thay thế bằng ảnh mặc định
           onError={(e) => {

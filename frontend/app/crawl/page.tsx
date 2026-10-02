@@ -238,12 +238,12 @@ export default function CrawlPage() {
                   value={jobSearch}
                   onChange={(event) => setJobSearch(event.target.value)}
                   placeholder="Tìm theo tên truyện, tác giả hoặc URL"
-                  className="min-w-[260px] flex-1 rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500"
+                  className="w-full min-w-0 flex-1 rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500 sm:min-w-[260px] sm:w-auto"
                 />
                 <select
                   value={jobStatusFilter}
                   onChange={(event) => setJobStatusFilter(event.target.value)}
-                  className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500"
+                  className="w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-orange-500 sm:w-auto"
                 >
                   <option value="all">Tất cả trạng thái</option>
                   <option value="queued">Đang chờ</option>

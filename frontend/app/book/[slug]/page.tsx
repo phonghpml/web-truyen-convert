@@ -153,7 +153,7 @@ export default function BookDetailsPage() {
   }, [chapters]);
 
   return (
-    <main className="min-h-screen bg-black text-white font-mono p-4 md:p-6">
+    <main className="min-h-screen bg-black p-3 font-mono text-white sm:p-4 md:p-6">
       <div className="max-w-5xl mx-auto w-full">
         <Navbar onHomeClick={() => router.push("/")} />
 
@@ -204,11 +204,11 @@ export default function BookDetailsPage() {
               )}
 
               <div className="w-full overflow-hidden">
-                <div className="mb-6 flex gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 p-1 text-xs uppercase tracking-[0.25em] text-zinc-400">
+                <div className="mb-6 flex gap-1 rounded-full border border-zinc-800 bg-zinc-950/80 p-1 text-[10px] uppercase tracking-[0.1em] text-zinc-400 sm:gap-2 sm:text-xs sm:tracking-[0.2em]">
                   <button
                     type="button"
                     onClick={() => setActiveTab("chapters")}
-                    className={`rounded-full px-4 py-2 transition-all ${activeTab === "chapters"
+                      className={`min-h-10 flex-1 rounded-full px-2 py-2 text-center transition-all sm:flex-none sm:px-4 ${activeTab === "chapters"
                         ? "bg-orange-500 text-black"
                         : "hover:bg-white/5 hover:text-white"
                       }`}
@@ -218,7 +218,7 @@ export default function BookDetailsPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("videos")}
-                    className={`rounded-full px-4 py-2 transition-all ${activeTab === "videos"
+                      className={`min-h-10 flex-1 rounded-full px-2 py-2 text-center transition-all sm:flex-none sm:px-4 ${activeTab === "videos"
                         ? "bg-orange-500 text-black"
                         : "hover:bg-white/5 hover:text-white"
                       }`}
@@ -247,7 +247,7 @@ export default function BookDetailsPage() {
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <p className="text-sm uppercase tracking-[0.2em] text-zinc-400">Video chương</p>
-                              <p className="mt-1 text-base font-semibold text-white">
+                              <div className="mt-1 text-base font-semibold text-white">
                                 <div className="mt-4 space-y-2">
                                   {video.video_title ? (
                                     <p className="text-lg font-semibold text-white">{video.video_title}</p>
@@ -270,7 +270,7 @@ export default function BookDetailsPage() {
                                     </div>
                                   ) : null}
                                 </div>
-                              </p>
+                              </div>
                             </div>
                             <div className="text-right text-sm text-zinc-400">
                               <p>Giọng: {video.voice}</p>

@@ -183,11 +183,11 @@ function RankContent() {
       <Navbar />
 
       <div className="py-4 md:py-8">
-        <div className="mb-4 md:mb-6 pb-4 border-b border-zinc-900 flex items-baseline gap-3">
-          <h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase italic">
+        <div className="mb-4 flex flex-col gap-1 border-b border-zinc-900 pb-4 sm:mb-6 sm:flex-row sm:items-baseline sm:gap-3">
+          <h1 className="break-words text-lg font-black uppercase italic tracking-tight text-white sm:text-xl md:text-2xl">
             {getActiveRankMeta().name}
           </h1>
-          <span className="text-[10px] md:text-xs font-mono text-zinc-600 tracking-wider uppercase">
+          <span className="break-words text-[9px] uppercase tracking-wider text-zinc-600 sm:text-[10px] md:text-xs">
             {"// "}{getActiveRankMeta().sub}
           </span>
         </div>
@@ -434,7 +434,7 @@ function RankContent() {
 
 export default function QidianRankPage() {
   return (
-    <main className="min-h-screen bg-black text-white font-mono p-6">
+    <main className="min-h-screen bg-black p-3 font-mono text-white sm:p-4 md:p-6">
       <Suspense fallback={
         <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500 font-mono text-xs uppercase tracking-widest animate-pulse">
           Đang tải dữ liệu bảng xếp hạng...

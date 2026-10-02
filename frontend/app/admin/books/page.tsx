@@ -517,8 +517,8 @@ export default function AdminBooksPage() {
       </div>
 
       {(showCreateModal || showEditModal) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-zinc-800 bg-[#101010] p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-3 sm:items-center sm:p-4">
+          <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl overflow-y-auto rounded-2xl border border-zinc-800 bg-[#101010] p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-5">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-black uppercase tracking-tight text-orange-400">{showEditModal ? "Sửa truyện" : "Thêm truyện mới"}</h2>

@@ -36,7 +36,7 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
   return (
     <nav className="sticky top-0 z-50 mx-auto mb-6 flex w-full max-w-6xl items-center justify-between border-b border-zinc-800 bg-black/80 px-4 pb-4 pt-2 backdrop-blur-md md:mb-8">
       {/* 1. LOGO */}
-      <div className="flex items-center gap-4 md:gap-8">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4 md:gap-8">
         {hasSidebar && managementSidebar && (
           <button
             type="button"
@@ -55,7 +55,7 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
           <div className="bg-orange-500 text-black p-1.5 rounded-sm shadow-[0_0_15px_rgba(249,115,22,0.4)] group-hover:scale-110 transition-transform">
             <Home size={18} fill="currentColor" />
           </div>
-          <span className="text-xl md:text-2xl font-black text-orange-500 tracking-tighter uppercase italic group-hover:text-white transition-colors">
+          <span className="text-lg font-black uppercase italic tracking-tighter text-orange-500 transition-colors group-hover:text-white sm:text-xl md:text-2xl">
             WEB_TRUYEN
           </span>
         </button>
@@ -99,7 +99,7 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
             </button>
 
             {isOpen && (
-              <div className="absolute right-0 mt-3 w-52 bg-zinc-950 border border-zinc-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[60]">
+              <div className="fixed right-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[60] mt-0 w-52 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-[0_10px_40px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-2 duration-200 sm:absolute sm:right-0 sm:top-full sm:mt-3 sm:max-w-none">
                 <div className="p-3 border-b border-zinc-900 bg-zinc-900/30">
                   <p className="text-[7px] text-zinc-500 uppercase font-black tracking-[0.2em]">User Profile Context</p>
                   <p className="text-[10px] text-zinc-300 font-bold truncate mt-1">{user.email}</p>
