@@ -18,6 +18,7 @@ PUBLIC_PATHS = [
 # These are intentionally permissive for GET/read operations used by the public UI.
 PUBLIC_PATHS += [
     "/books",
+    "/books/search",
     "/chapters",
     "/get-chapter-content",
     "/get-chapters",
@@ -27,26 +28,17 @@ PUBLIC_PATHS += [
     "/crawl/youtube/callback",
 ]
 
+PUBLIC_PATH_PREFIXES = (
+    "/docs/",
+    "/redoc/",
+    "/static/",
+)
+
 
 def is_public_path(path: str) -> bool:
     if not path:
         return True
-    for p in PUBLIC_PATHS:
-        # root should only match exactly '/'
-        if p == "/":
-            if path == "/":
-                return True
-            continue
-        # If the configured public path ends with '/', allow any prefix match
-        if p.endswith("/"):
-            if path.startswith(p):
-                return True
-            continue
-
-        # Otherwise allow exact match or prefix followed by a slash (to avoid '/books123' matching '/books')
-        if path == p or path.startswith(p + "/"):
-            return True
-    return False
+    return path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES)
 
 
 async def enforce_auth_middleware(request, call_next):

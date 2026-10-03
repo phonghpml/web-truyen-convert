@@ -54,7 +54,7 @@ export default function Login() {
       }
       dispatchAuthChange();
       success("Đăng nhập thành công!");
-      setTimeout(() => router.push("/"), 500);
+      router.replace("/");
     } catch {
       error("Đã có lỗi xảy ra!");
     } finally {

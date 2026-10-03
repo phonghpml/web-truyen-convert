@@ -19,12 +19,24 @@ _browser_lock = asyncio.Lock()
 PAGE_CLOSE_DELAY_SECONDS = 0
 STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS = 10
 STV_PROFILE_DIR = Path(__file__).resolve().parent / "browser_profiles" / "stv"
+DEBUG_ARTIFACT_DIR = Path(tempfile.gettempdir()) / "web-truyen-convert-debug"
 
 
 def _debug_artifact_path(filename: str) -> Path:
-    debug_dir = Path(tempfile.gettempdir()) / "web-truyen-convert-debug"
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    return debug_dir / filename
+    DEBUG_ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    return DEBUG_ARTIFACT_DIR / filename
+
+
+def get_latest_debug_screenshot() -> Path | None:
+    if not DEBUG_ARTIFACT_DIR.exists():
+        return None
+
+    png_files = sorted(
+        DEBUG_ARTIFACT_DIR.glob("*.png"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return png_files[0] if png_files else None
 
 
 async def _save_debug_screenshot(page, filename: str, **options) -> bool:

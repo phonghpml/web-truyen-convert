@@ -37,7 +37,7 @@ def _get_field(row: dict, field: str, default=None):
     return getattr(row, field, default)
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 import auth as auth_utils
@@ -79,7 +79,8 @@ def _build_chapter_range(chapter_start: int, chapter_count: int, total_chapters:
 
 async def _resolve_job_book_metadata(job: CrawlJobData) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     try:
-        book = await db_mod.client.book.find_unique(where={"source_url": normalize_source_url(job.book_url)})
+        async with JOBS_DB_SEMAPHORE:
+            book = await db_mod.client.book.find_unique(where={"source_url": normalize_source_url(job.book_url)})
     except Exception:
         book = None
 
@@ -152,7 +153,8 @@ async def _get_db_chapter_count(book_url: str) -> int:
         return cached_entry[2]
 
     try:
-        book = await db_mod.client.book.find_unique(where={"source_url": normalized_book_url})
+        async with JOBS_DB_SEMAPHORE:
+            book = await db_mod.client.book.find_unique(where={"source_url": normalized_book_url})
         if book:
             chapters_count = getattr(book, "chapters_count", None)
             if chapters_count is None:
@@ -181,10 +183,11 @@ async def _load_book_chapter_summary(book_url: str) -> tuple[list[CrawlChapterIt
     max_retries = 3
     for attempt in range(1, max_retries + 1):
         try:
-            db_chapters = await db_mod.client.chapter.find_many(
-                where={"book_source_url": normalized_book_url},
-                order={"chapter_no": "asc"},
-            )
+            async with JOBS_DB_SEMAPHORE:
+                db_chapters = await db_mod.client.chapter.find_many(
+                    where={"book_source_url": normalized_book_url},
+                    order={"chapter_no": "asc"},
+                )
             break
         except Exception as exc:
             logger.warning("Attempt %s/%s: failed to load chapters for %s: %s", attempt, max_retries, normalized_book_url, exc)
@@ -572,6 +575,20 @@ async def submit_crawl(request: CrawlSubmitRequest):
     _ensure_background_task(job.job_id)
     db_chapter_count = await _get_db_chapter_count(job.book_url)
     return {"success": True, "data": await _job_to_payload(job, db_chapter_count=db_chapter_count)}
+
+
+@router.get("/debug/latest-screenshot")
+async def get_latest_crawl_debug_screenshot():
+    screenshot_path = scr.get_latest_debug_screenshot()
+    if screenshot_path is None:
+        raise HTTPException(status_code=404, detail="Chưa có ảnh debug nào được lưu")
+
+    return FileResponse(
+        path=screenshot_path,
+        media_type="image/png",
+        filename=screenshot_path.name,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/check")

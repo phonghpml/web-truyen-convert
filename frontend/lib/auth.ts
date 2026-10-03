@@ -4,7 +4,11 @@ import type { AuthUser, ApiResponse, LibraryStatusResponse, ReadingHistory } fro
 export const AUTH_CHANGE_EVENT = "web_truyen_auth_change";
 const AUTH_TOKEN_KEY = "web_truyen_auth_token";
 const AUTH_USER_KEY = "web_truyen_auth_user";
+const REFRESH_SESSION_HINT_KEY = "web_truyen_refresh_session_hint";
 let refreshPromise: Promise<{ token: string; user: AuthUser } | null> | null = null;
+let fetchMePromise: Promise<ApiResponse<AuthUser>> | null = null;
+let fetchMeCache: { token: string; expiresAt: number; response: ApiResponse<AuthUser> } | null = null;
+const FETCH_ME_CACHE_MS = 15_000;
 
 function safeParse(value: string | null) {
   if (!value) return null;
@@ -35,21 +39,9 @@ export function getAuthToken(): string | null {
   return window.localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
-export function hasRefreshCookie(): boolean {
-  if (typeof document === "undefined") return false;
-
-  return document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .some((part) => {
-      const [name, ...rest] = part.split("=");
-      return name === "refresh_token" && rest.join("=").trim().length > 0;
-    });
-}
-
-export function hasAuthSession(): boolean {
-  return Boolean(getAuthToken() || hasRefreshCookie());
+export function hasRefreshSessionHint(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(REFRESH_SESSION_HINT_KEY) === "1";
 }
 
 function base64UrlToBase64(input: string) {
@@ -108,8 +100,12 @@ export function getStoredUser(): AuthUser | null {
 
 export function saveAuth(token: string, user: AuthUser) {
   if (typeof window === "undefined") return;
+  if (window.localStorage.getItem(AUTH_TOKEN_KEY) !== token) {
+    fetchMeCache = null;
+  }
   window.localStorage.setItem(AUTH_TOKEN_KEY, token);
   window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  window.localStorage.setItem(REFRESH_SESSION_HINT_KEY, "1");
 }
 
 export function updateStoredUser(user: AuthUser) {
@@ -119,8 +115,10 @@ export function updateStoredUser(user: AuthUser) {
 
 export function clearAuth() {
   if (typeof window === "undefined") return;
+  fetchMeCache = null;
   window.localStorage.removeItem(AUTH_TOKEN_KEY);
   window.localStorage.removeItem(AUTH_USER_KEY);
+  window.localStorage.removeItem(REFRESH_SESSION_HINT_KEY);
 }
 
 export function dispatchAuthChange() {
@@ -133,19 +131,7 @@ function buildAuthHeaders(initialHeaders?: HeadersInit, body?: BodyInit | null) 
   const token = getAuthToken();
 
   if (token) {
-    try {
-      if (isTokenExpired(token)) {
-        // clear expired token and notify app
-        if (typeof window !== "undefined") {
-          clearAuth();
-          dispatchAuthChange();
-        }
-      } else {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-    } catch {
-      // on error, do not attach token
-    }
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
@@ -164,7 +150,7 @@ export async function authFetch(input: RequestInfo, init: RequestInit = {}) {
     headers,
   });
 
-  if (res.status === 401 && typeof window !== "undefined") {
+  if (res.status === 401 && typeof window !== "undefined" && (getAuthToken() || hasRefreshSessionHint())) {
     const refreshed = await refreshFromCookie();
     if (refreshed) {
       const retryHeaders = buildAuthHeaders(init.headers || {}, init.body ?? null);
@@ -185,7 +171,6 @@ export async function authFetch(input: RequestInfo, init: RequestInit = {}) {
 }
 
 export async function refreshFromCookie() {
-  if (!hasAuthSession()) return null;
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
@@ -242,9 +227,32 @@ export async function login(email: string, password: string) {
   return parseJsonSafe(response);
 }
 
-export async function fetchMe() {
-  const response = await authFetch(ENDPOINTS.AUTH_ME, { method: "GET" });
-  return parseJsonSafe(response);
+export async function fetchMe(): Promise<ApiResponse<AuthUser>> {
+  const token = getAuthToken();
+  if (token && fetchMeCache?.token === token && fetchMeCache.expiresAt > Date.now()) {
+    return fetchMeCache.response;
+  }
+
+  const request = fetchMePromise ?? (fetchMePromise = (async () => {
+    const response = await authFetch(ENDPOINTS.AUTH_ME, { method: "GET" });
+    return await parseJsonSafe(response) as ApiResponse<AuthUser>;
+  })());
+
+  try {
+    const response = await request;
+    if (token && response.success && response.data) {
+      fetchMeCache = {
+        token,
+        expiresAt: Date.now() + FETCH_ME_CACHE_MS,
+        response,
+      };
+    }
+    return response;
+  } finally {
+    if (fetchMePromise === request) {
+      fetchMePromise = null;
+    }
+  }
 }
 
 export async function getReadingHistory(book_url: string) {

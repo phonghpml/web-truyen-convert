@@ -1,8 +1,26 @@
+import os
+
 import pytest
 
 import main
 import scraper
 from db import chapter as db_chapter
+
+
+def test_get_latest_debug_screenshot_returns_newest_png(tmp_path, monkeypatch):
+    monkeypatch.setattr(scraper, "DEBUG_ARTIFACT_DIR", tmp_path)
+    older_image = tmp_path / "debug_1_timeout.png"
+    newer_image = tmp_path / "debug_2_crash.png"
+    html_dump = tmp_path / "debug_3_crash.html"
+
+    for path in (older_image, newer_image, html_dump):
+        path.write_bytes(b"debug")
+
+    os.utime(older_image, (1, 1))
+    os.utime(newer_image, (2, 2))
+    os.utime(html_dump, (3, 3))
+
+    assert scraper.get_latest_debug_screenshot() == newer_image
 
 
 @pytest.mark.parametrize(

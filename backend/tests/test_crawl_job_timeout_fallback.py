@@ -1,9 +1,11 @@
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
 import routes.crawl as crawl
+import db.chapter as chapter_db
 from crawl_queue import CrawlJobStatus, CrawlQueueManager
 import services.crawl_service as crawl_service
 
@@ -95,3 +97,34 @@ async def test_load_job_chapters_falls_back_to_empty_when_db_times_out(monkeypat
     assert job.chapters == []
     assert job.total_chapters == 0
     assert job.crawled_chapters == 0
+
+
+@pytest.mark.asyncio
+async def test_save_chapters_uses_bounded_concurrency(monkeypatch):
+    active = 0
+    peak_active = 0
+
+    async def fake_find_unique(*args, **kwargs):
+        return SimpleNamespace(source_url="https://example.com/book")
+
+    async def fake_upsert(*args, **kwargs):
+        nonlocal active, peak_active
+        active += 1
+        peak_active = max(peak_active, active)
+        try:
+            await asyncio.sleep(0.02)
+            return {"ok": True}
+        finally:
+            active -= 1
+
+    fake_client = SimpleNamespace(
+        book=SimpleNamespace(find_unique=fake_find_unique),
+        chapter=SimpleNamespace(upsert=fake_upsert),
+    )
+    monkeypatch.setattr(chapter_db, "client", fake_client)
+
+    chapters = [{"title": f"Chương {i}", "url": f"https://example.com/ch{i}", "slug": f"chuong-{i}", "chapter_no": i, "access": "regular"} for i in range(1, 21)]
+
+    await chapter_db.save_chapters("https://example.com/book", chapters)
+
+    assert peak_active <= 8, f"expected bounded concurrency, got peak_active={peak_active}"

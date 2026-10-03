@@ -71,21 +71,11 @@ configured_origins = list(dict.fromkeys(["https://web-truyen-convert.vercel.app"
 
 logger.info("CORS configured origins: %s", configured_origins)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=configured_origins,
-    # Hỗ trợ thêm tất cả các domain Preview của Vercel (nếu có)
-    allow_origin_regex=r"https://web-truyen-convert.*\.vercel\.app", 
-    allow_credentials=True,
-    allow_methods=["*"],  # Nên dùng "*" để cho phép tất cả các HTTP method kể cả OPTIONS
-    allow_headers=["*"],  # Cho phép tất cả custom headers truyền lên từ client
-    expose_headers=["*"],
-)
-
 # Global HTTP middleware to enforce login-first policy for non-public APIs.
 @app.middleware("http")
 async def _enforce_auth_middleware(request, call_next):
     return await enforce_auth_middleware(request, call_next)
+
 
 @app.get("/")
 async def root():
@@ -709,6 +699,29 @@ async def api_update_manual_book(
     }
 
 
+def _read_row_field(row, field: str, default=None):
+    return row.get(field, default) if isinstance(row, dict) else getattr(row, field, default)
+
+
+async def _chapter_counts_for_books(book_urls: list[str | None]) -> dict[str, int]:
+    urls = list(dict.fromkeys(url for url in book_urls if url))
+    if not urls:
+        return {}
+
+    grouped_counts = await db_mod.client.chapter.group_by(
+        by=["book_source_url"],
+        where={"book_source_url": {"in": urls}},
+        count={"_all": True},
+    )
+    counts = {}
+    for row in grouped_counts:
+        book_url = _read_row_field(row, "book_source_url")
+        aggregate = _read_row_field(row, "_count", {})
+        if book_url:
+            counts[book_url] = int(_read_row_field(aggregate, "_all", 0) or 0)
+    return counts
+
+
 @app.get("/books")
 async def api_list_books(
     slug: Optional[str] = None,
@@ -723,25 +736,25 @@ async def api_list_books(
             book = await db_mod.client.book.find_unique(where={"slug": slug})
             if not book:
                 return {"success": True, "data": []}
-            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
-            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
-            return {"success": True, "data": [db_mod.serialize_book_row(book, chapters_count)]}
+            book_url = _read_row_field(book, "source_url")
+            counts = await _chapter_counts_for_books([book_url])
+            return {"success": True, "data": [db_mod.serialize_book_row(book, counts.get(book_url, 0))]}
 
         if source_url:
             book = await db_mod.client.book.find_unique(where={"source_url": source_url})
             if not book:
                 return {"success": True, "data": []}
-            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
-            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
-            return {"success": True, "data": [db_mod.serialize_book_row(book, chapters_count)]}
+            book_url = _read_row_field(book, "source_url")
+            counts = await _chapter_counts_for_books([book_url])
+            return {"success": True, "data": [db_mod.serialize_book_row(book, counts.get(book_url, 0))]}
 
         if id:
             book = await db_mod.client.book.find_unique(where={"id": id})
             if not book:
                 return {"success": True, "data": []}
-            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
-            chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
-            return {"success": True, "data": [db_mod.serialize_book_row(book, chapters_count)]}
+            book_url = _read_row_field(book, "source_url")
+            counts = await _chapter_counts_for_books([book_url])
+            return {"success": True, "data": [db_mod.serialize_book_row(book, counts.get(book_url, 0))]}
 
         where_clause = {}
         if q and q.strip():
@@ -759,16 +772,12 @@ async def api_list_books(
             take=limit,
         )
 
-        payload = []
-        for book in books:
-            source_url_value = getattr(book, "source_url", None) if not isinstance(book, dict) else book["source_url"]
-            chapters_count = 0
-            if source_url_value:
-                try:
-                    chapters_count = await db_mod.client.chapter.count(where={"book_source_url": source_url_value})
-                except Exception:
-                    chapters_count = 0
-            payload.append(db_mod.serialize_book_row(book, chapters_count))
+        book_urls = [_read_row_field(book, "source_url") for book in books]
+        chapter_counts = await _chapter_counts_for_books(book_urls)
+        payload = [
+            db_mod.serialize_book_row(book, chapter_counts.get(book_url, 0))
+            for book, book_url in zip(books, book_urls)
+        ]
 
         total = await db_mod.client.book.count(where=where_clause)
         return {"success": True, "data": payload, "total": total, "limit": limit, "skip": skip}
@@ -1041,3 +1050,15 @@ async def api_get_qidian_rank(
     except Exception as e:
         logger.exception(f"🔥 Lỗi nghiêm trọng tại API BXH Qidian: {e} Test code")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Wrap the complete FastAPI app so CORS also covers framework-generated 500 responses.
+app = CORSMiddleware(
+    app=app,
+    allow_origins=configured_origins,
+    allow_origin_regex=r"https://web-truyen-convert.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)

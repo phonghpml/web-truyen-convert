@@ -1,5 +1,6 @@
 import asyncio
 import os
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -31,6 +32,39 @@ class SerializationTests(unittest.TestCase):
         self.assertEqual(payload['title_vi'], 'Tiêu đề')
         self.assertEqual(payload['views_count'], 12)
         self.assertEqual(payload['updated_at'], '2024-01-01T00:00:00')
+
+    def test_api_list_books_aggregates_chapter_counts_in_one_query(self):
+        book = {
+            'id': 'book-1',
+            'source_url': 'https://example.com/book',
+            'slug': 'book-slug',
+            'title_vi': 'Tiêu đề',
+            'chapters_count': 7,
+        }
+
+        chapter_count = AsyncMock()
+        chapter_group_by = AsyncMock(return_value=[{
+            'book_source_url': 'https://example.com/book',
+            '_count': {'_all': 7},
+        }])
+        fake_client = SimpleNamespace(
+            book=SimpleNamespace(
+                find_many=AsyncMock(return_value=[book]),
+                count=AsyncMock(return_value=1),
+            ),
+            chapter=SimpleNamespace(count=chapter_count, group_by=chapter_group_by),
+        )
+
+        with patch.object(main.db_mod, 'client', fake_client):
+            response = asyncio.run(main.api_list_books(limit=24))
+
+        self.assertEqual(response['data'][0]['chapters_count'], 7)
+        chapter_group_by.assert_awaited_once_with(
+            by=['book_source_url'],
+            where={'book_source_url': {'in': ['https://example.com/book']}},
+            count={'_all': True},
+        )
+        chapter_count.assert_not_awaited()
 
     def test_serialize_chapter_row_uses_expected_shape(self):
         row = {

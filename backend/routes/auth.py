@@ -17,6 +17,19 @@ def _cookie_secure_flag() -> bool:
     return os.getenv("COOKIE_SECURE", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _set_refresh_cookie(response: Response, request: Request, token: str, max_age: int) -> None:
+    secure = _cookie_secure_flag() or request.headers.get("origin", "").startswith("https://")
+    response.set_cookie(
+        key="refresh_token",
+        value=token,
+        httponly=True,
+        secure=secure,
+        samesite="none" if secure else "lax",
+        max_age=max_age,
+        path="/",
+    )
+
+
 def _get_user_value(user, key, default=None):
     if user is None:
         return default
@@ -87,9 +100,9 @@ async def register(request: AuthRequest):
 
 
 @router.post("/login")
-async def login(request: AuthRequest, response: Response):
-    email = _normalize_email(request.email)
-    password = request.password.strip() if isinstance(request.password, str) else ""
+async def login(payload: AuthRequest, response: Response, http_request: Request):
+    email = _normalize_email(payload.email)
+    password = payload.password.strip() if isinstance(payload.password, str) else ""
 
     if not email or not password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email và mật khẩu không được để trống")
@@ -104,17 +117,8 @@ async def login(request: AuthRequest, response: Response):
     refresh_token = await auth_service.create_refresh_token(email)
 
     # Cookie options: HttpOnly, Secure where appropriate, SameSite lax to allow OAuth flows
-    secure_flag = _cookie_secure_flag()
     max_age = int(os.getenv("REFRESH_TOKEN_EXPIRES_SECONDS", 30 * 24 * 3600))
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=secure_flag,
-        samesite="lax",
-        max_age=max_age,
-        path="/",
-    )
+    _set_refresh_cookie(response, http_request, refresh_token, max_age)
 
     return {
         "success": True,
@@ -144,17 +148,8 @@ async def refresh(request: Request, response: Response):
 
     # Rotate refresh token: revoke old and issue new
     new_refresh = await auth_service.rotate_refresh_token(token, user_email)
-    secure_flag = _cookie_secure_flag()
     max_age = int(os.getenv("REFRESH_TOKEN_EXPIRES_SECONDS", 30 * 24 * 3600))
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh,
-        httponly=True,
-        secure=secure_flag,
-        samesite="lax",
-        max_age=max_age,
-        path="/",
-    )
+    _set_refresh_cookie(response, request, new_refresh, max_age)
 
     access_token = auth_utils.create_access_token(user_email)
     user = await db_mod.client.user.find_unique(where={"email": user_email})
@@ -179,7 +174,7 @@ async def logout(request: Request, response: Response):
         await auth_service.revoke_refresh_token(token)
 
     # Clear cookie
-    response.set_cookie(key="refresh_token", value="", httponly=True, secure=_cookie_secure_flag(), samesite="lax", max_age=0, path="/")
+    _set_refresh_cookie(response, request, "", 0)
     return {"success": True}
 
 

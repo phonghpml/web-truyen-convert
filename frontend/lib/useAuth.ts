@@ -1,46 +1,24 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getStoredUser, getAuthToken, isTokenExpired, clearAuth, fetchMe, saveAuth, dispatchAuthChange, AUTH_CHANGE_EVENT, refreshFromCookie, logout, hasRefreshCookie } from "./auth";
+import { getStoredUser, getAuthToken, hasRefreshSessionHint, isTokenExpired, clearAuth, fetchMe, saveAuth, dispatchAuthChange, AUTH_CHANGE_EVENT, refreshFromCookie, logout } from "./auth";
 import type { AuthUser } from "./types";
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const updateUser = async () => {
       try {
+        const storedUser = getStoredUser();
+        if (storedUser) {
+          setUser(storedUser);
+        }
+
         const token = getAuthToken();
-        const hasSession = Boolean(token || hasRefreshCookie());
-
-        if (!hasSession) {
-          clearAuth();
-          setUser(null);
-          dispatchAuthChange();
-          return;
-        }
-
-        if (!token) {
-          const refreshed = await refreshFromCookie();
-          if (refreshed && refreshed.token) {
-            const refreshedUser: AuthUser = {
-              email: refreshed.user?.email,
-              name: refreshed.user?.name,
-              role: refreshed.user?.role,
-            };
-            setUser(refreshedUser);
-            return;
-          }
-
-          clearAuth();
-          setUser(null);
-          dispatchAuthChange();
-          return;
-        }
-
-        if (isTokenExpired(token)) {
-          if (!hasRefreshCookie()) {
+        if (!token || isTokenExpired(token)) {
+          if (!token && !hasRefreshSessionHint()) {
             clearAuth();
             setUser(null);
             dispatchAuthChange();

@@ -4,6 +4,33 @@ from datetime import datetime
 
 from .client import client
 
+# Prisma/Postgres has a small connection pool in constrained deployments (for example HF free tiers).
+# Batch the chapter upserts and cap the number of in-flight writes so we do not exhaust sessions with
+# large chapter lists or multiple jobs running at the same time.
+CHAPTER_UPSERT_CONCURRENCY = 8
+CHAPTER_UPSERT_BATCH_SIZE = 10
+CHAPTER_UPSERT_SEMAPHORE = asyncio.Semaphore(CHAPTER_UPSERT_CONCURRENCY)
+
+
+def _chunked(items: list, chunk_size: int):
+    for index in range(0, len(items), chunk_size):
+        yield items[index:index + chunk_size]
+
+
+async def _upsert_chapter_batch(book_url: str, chapters_list: list) -> list:
+    async def upsert_one(chapter_data: dict):
+        async with CHAPTER_UPSERT_SEMAPHORE:
+            return await client.chapter.upsert(
+                where={"url": chapter_data["url"]},
+                data={
+                    "create": chapter_data,
+                    "update": chapter_data,
+                },
+            )
+
+    tasks = [upsert_one(chapter_data) for chapter_data in chapters_list]
+    return await asyncio.gather(*tasks)
+
 
 async def get_chapter_by_url(url: str):
     """Get full chapter object by URL."""
@@ -117,7 +144,7 @@ async def save_chapters(book_url: str, chapters_list: list, replace_existing: bo
             pass
         return created_count
 
-    tasks = []
+    batches = []
     for ch in chapters_list:
         chapter_no_value = ch.get("chapter_no")
         if chapter_no_value is None:
@@ -135,17 +162,13 @@ async def save_chapters(book_url: str, chapters_list: list, replace_existing: bo
             "is_story_content": is_story_title(title_val),
             "updatedAt": datetime.now(),
         }
-        tasks.append(
-            client.chapter.upsert(
-                where={"url": chapter_data["url"]},
-                data={
-                    "create": chapter_data,
-                    "update": chapter_data,
-                },
-            )
-        )
+        batches.append(chapter_data)
 
-    result = await asyncio.gather(*tasks)
+    result = []
+    for batch in _chunked(batches, CHAPTER_UPSERT_BATCH_SIZE):
+        batch_result = await _upsert_chapter_batch(book_url, batch)
+        result.extend(batch_result)
+
     try:
         await client.book.update(
             where={"source_url": book_url},
