@@ -176,7 +176,21 @@ async def crawl_job_worker(job: CrawlJobData, manager: CrawlQueueManager) -> Non
                 await persist_crawl_job(job)
                 continue
 
-            raw_content = await scr.scrape_stv_chapter_content(chapter.url)
+            try:
+                raw_content = await scr.scrape_stv_chapter_content(chapter.url, job_id=job.job_id)
+            except scr.STVAccessBlocked as exc:
+                manager.pause_job(job.job_id)
+                job.updated_at = datetime.now(timezone.utc)
+                logger.warning(
+                    "Pausing crawl job %s after STV access denial: code=%s captcha_detected=%s chapter=%s",
+                    job.job_id,
+                    exc.code,
+                    exc.captcha_detected,
+                    chapter.chapter_no,
+                )
+                await persist_crawl_job(job)
+                return
+
             if not raw_content:
                 chapter.status = CrawlChapterStatus.failed
                 manager.record_chapter_status(job.job_id, chapter.chapter_no, CrawlChapterStatus.failed)

@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -44,6 +45,86 @@ def test_normalize_stv_chapter_data_handles_both_payload_variants(raw_data, expe
     for fragment in expected_fragments:
         assert fragment in text
     assert "<" not in text
+
+
+@pytest.mark.parametrize(
+    "page_text, expected",
+    [
+        ("Please complete the security check", True),
+        ("请完成安全验证", True),
+        ("Nội dung chương truyện bình thường", False),
+    ],
+)
+def test_stv_captcha_marker_detection(page_text, expected):
+    assert scraper._contains_stv_captcha_marker(page_text) is expected
+
+
+@pytest.mark.asyncio
+async def test_stv_captcha_actions_control_and_release_retained_page(monkeypatch):
+    events = []
+
+    class FakeMouse:
+        async def click(self, x, y):
+            events.append(("click", x, y))
+
+        async def move(self, x, y, **kwargs):
+            events.append(("move", x, y, kwargs.get("steps")))
+
+        async def down(self):
+            events.append(("down",))
+
+        async def up(self):
+            events.append(("up",))
+
+    class FakeKeyboard:
+        async def insert_text(self, text):
+            events.append(("text", text))
+
+        async def press(self, key):
+            events.append(("press", key))
+
+    class FakePage:
+        mouse = FakeMouse()
+        keyboard = FakeKeyboard()
+
+        def is_closed(self):
+            return False
+
+        async def screenshot(self, **_kwargs):
+            return b"png"
+
+        async def close(self):
+            events.append(("close",))
+
+    page = FakePage()
+    monkeypatch.setitem(
+        scraper.STV_CAPTCHA_CHALLENGES,
+        "job-1",
+        {
+            "page": page,
+            "chapter_id": "123",
+            "chapter_url": "https://sangtacviet.com/chapter/123",
+            "code": "21",
+            "captcha_detected": True,
+            "created_at": 1.0,
+        },
+    )
+
+    assert await scraper.get_stv_captcha_screenshot("job-1") == b"png"
+    await scraper.perform_stv_captcha_action("job-1", {"action": "click", "x": 20, "y": 30})
+    await scraper.perform_stv_captcha_action("job-1", {
+        "action": "drag", "x": 10, "y": 20, "end_x": 100, "end_y": 20,
+    })
+    await scraper.perform_stv_captcha_action("job-1", {"action": "type", "text": "ABCD"})
+    await scraper.perform_stv_captcha_action("job-1", {"action": "press", "key": "Enter"})
+    await scraper.close_stv_captcha_challenge("job-1")
+
+    assert ("click", 20, 30) in events
+    assert ("down",) in events and ("up",) in events
+    assert ("text", "ABCD") in events
+    assert ("press", "Enter") in events
+    assert ("close",) in events
+    assert "job-1" not in scraper.STV_CAPTCHA_CHALLENGES
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ENDPOINTS, MESSAGES } from "./constants";
+import { CRAWLER_BASE_URL, ENDPOINTS, MESSAGES } from "./constants";
 import { authFetch } from "./auth";
 
 type CrawlJobStatus = "queued" | "running" | "paused" | "completed" | "failed";
@@ -35,6 +35,48 @@ export interface CrawlJob {
     access?: "regular" | "vip" | "unvip";
     status: string;
   }>;
+}
+
+export interface CrawlCaptchaChallenge {
+  job_id: string;
+  chapter_id: string;
+  chapter_url: string;
+  code: string;
+  captcha_detected: boolean;
+  created_at: number;
+}
+
+export type CrawlCaptchaAction =
+  | { action: "click"; x: number; y: number }
+  | { action: "drag"; x: number; y: number; end_x: number; end_y: number }
+  | { action: "type"; text: string }
+  | { action: "press"; key: string };
+
+const CRAWL_CAPTCHA_BASE = `${CRAWLER_BASE_URL}/crawl/captcha/challenges`;
+
+export async function fetchCrawlCaptchaChallenges(): Promise<CrawlCaptchaChallenge[]> {
+  const response = await authFetch(CRAWL_CAPTCHA_BASE, { method: "GET" });
+  const result = await response.json();
+  if (!response.ok || !result.success || !Array.isArray(result.data)) {
+    throw new Error(result.detail || "Không thể tải phiên xác minh");
+  }
+  return result.data as CrawlCaptchaChallenge[];
+}
+
+export async function fetchCrawlCaptchaScreenshot(jobId: string): Promise<Blob> {
+  const response = await authFetch(`${CRAWL_CAPTCHA_BASE}/${encodeURIComponent(jobId)}/screenshot`);
+  if (!response.ok) {
+    throw new Error("Không thể tải ảnh xác minh");
+  }
+  return response.blob();
+}
+
+export async function sendCrawlCaptchaAction(jobId: string, action: CrawlCaptchaAction) {
+  const response = await authFetch(`${CRAWL_CAPTCHA_BASE}/${encodeURIComponent(jobId)}/action`, {
+    method: "POST",
+    body: JSON.stringify(action),
+  });
+  return response.json();
 }
 
 export async function submitCrawlJob(url: string) {

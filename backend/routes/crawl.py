@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import uuid4
 from utils import normalize_source_url
 
@@ -37,8 +37,8 @@ def _get_field(row: dict, field: str, default=None):
     return getattr(row, field, default)
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends
-from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from pydantic import BaseModel, Field
 
 import auth as auth_utils
 import database as db_mod
@@ -94,6 +94,16 @@ async def _resolve_job_book_metadata(job: CrawlJobData) -> tuple[Optional[str], 
 
 class CrawlSubmitRequest(BaseModel):
     url: str
+
+
+class STVCaptchaActionRequest(BaseModel):
+    action: Literal["click", "drag", "type", "press"]
+    x: Optional[float] = Field(default=None, ge=0, le=1280)
+    y: Optional[float] = Field(default=None, ge=0, le=720)
+    end_x: Optional[float] = Field(default=None, ge=0, le=1280)
+    end_y: Optional[float] = Field(default=None, ge=0, le=720)
+    text: Optional[str] = Field(default=None, max_length=200)
+    key: Optional[str] = Field(default=None, max_length=30)
 
 
 class CrawlJobSummary(BaseModel):
@@ -982,9 +992,38 @@ async def resume_crawl_job(job_id: str):
     job = queue_manager.resume_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job không tìm thấy")
+    await scr.close_stv_captcha_challenge(job_id)
     await _persist_job(job)
     _ensure_background_task(job_id)
     return {"success": True, "data": await _job_to_payload(job)}
+
+
+@router.get("/captcha/challenges")
+async def list_stv_captcha_challenges():
+    return {"success": True, "data": scr.get_stv_captcha_challenges()}
+
+
+@router.get("/captcha/challenges/{job_id}/screenshot")
+async def get_stv_captcha_screenshot(job_id: str):
+    screenshot = await scr.get_stv_captcha_screenshot(job_id)
+    if screenshot is None:
+        raise HTTPException(status_code=404, detail="Không còn phiên CAPTCHA cho job này")
+    return Response(
+        content=screenshot,
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.post("/captcha/challenges/{job_id}/action")
+async def perform_stv_captcha_action(job_id: str, request: STVCaptchaActionRequest):
+    try:
+        await scr.perform_stv_captcha_action(job_id, request.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Không còn phiên CAPTCHA cho job này") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True}
 
 
 @router.delete("/jobs/{job_id}")
@@ -993,6 +1032,7 @@ async def delete_crawl_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job không tìm thấy")
     queue_manager.remove_job(job_id)
+    await scr.close_stv_captcha_challenge(job_id)
     await db_mod.delete_crawl_job(job_id)
     return {"success": True, "message": "Đã xóa job"}
 

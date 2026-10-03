@@ -1,12 +1,13 @@
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 import routes.crawl as crawl
 import db.chapter as chapter_db
-from crawl_queue import CrawlJobStatus, CrawlQueueManager
+from crawl_queue import CrawlChapterItem, CrawlChapterStatus, CrawlJobStatus, CrawlQueueManager
 import services.crawl_service as crawl_service
 
 
@@ -128,3 +129,46 @@ async def test_save_chapters_uses_bounded_concurrency(monkeypatch):
     await chapter_db.save_chapters("https://example.com/book", chapters)
 
     assert peak_active <= 8, f"expected bounded concurrency, got peak_active={peak_active}"
+
+
+@pytest.mark.asyncio
+async def test_crawl_worker_pauses_without_failing_chapter_on_stv_access_denial(monkeypatch):
+    manager = CrawlQueueManager()
+    job = manager.add_job("https://sangtacviet.com/truyen/qidian/1/123/")
+    chapter_url = f"{job.book_url}456/"
+
+    async def fake_scrape_basic_info(_url):
+        return {}
+
+    async def fake_scrape_chapters(_url):
+        return [{"title_vi": "Chương 1", "url": chapter_url}]
+
+    async def fake_find_unique(**_kwargs):
+        return None
+
+    async def fake_scrape_chapter(_url, job_id=None):
+        assert job_id == job.job_id
+        raise crawl_service.scr.STVAccessBlocked("21", captcha_detected=True)
+
+    async def no_op(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(crawl_service.scr, "scrape_stv_basic_info", fake_scrape_basic_info)
+    monkeypatch.setattr(crawl_service.scr, "scrape_stv_chapters", fake_scrape_chapters)
+    monkeypatch.setattr(crawl_service.scr, "scrape_stv_chapter_content", fake_scrape_chapter)
+    close_browser = AsyncMock()
+    monkeypatch.setattr(crawl_service.scr, "close_browser", close_browser)
+    monkeypatch.setattr(crawl_service, "save_book_info", no_op)
+    monkeypatch.setattr(crawl_service.db_mod, "save_chapters", no_op)
+    monkeypatch.setattr(crawl_service, "persist_crawl_job", no_op)
+    monkeypatch.setattr(
+        crawl_service.db_mod,
+        "client",
+        SimpleNamespace(chapter=SimpleNamespace(find_unique=fake_find_unique)),
+    )
+
+    await crawl_service.crawl_job_worker(job, manager)
+
+    assert job.status == CrawlJobStatus.paused
+    assert job.chapters[0].status == CrawlChapterStatus.pending
+    close_browser.assert_not_awaited()
