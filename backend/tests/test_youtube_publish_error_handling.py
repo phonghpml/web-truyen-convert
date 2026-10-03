@@ -26,7 +26,6 @@ class YoutubePublishErrorHandlingTests(unittest.TestCase):
     )
     def test_publish_video_to_youtube_turns_download_errors_into_http_502(
         self,
-        mock_get_video_by_id,
         mock_download_remote_video,
         mock_refresh_access_token,
         mock_get_refresh_token,

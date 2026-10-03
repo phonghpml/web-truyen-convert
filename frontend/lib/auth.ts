@@ -24,7 +24,7 @@ async function parseJsonSafe(res: Response) {
   if (ct.includes("application/json")) {
     try {
       return await res.json();
-    } catch (e) {
+    } catch {
       const raw = await res.text().catch(() => null);
       return { success: false, error: "invalid_json", raw };
     }

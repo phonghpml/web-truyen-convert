@@ -15,9 +15,9 @@ import type { Video } from "@/lib/types";
 
 export default function AdminVideosPage() {
   const router = useRouter();
-  const { user, isAdmin, isLoading } = useAuth();
+  const { isAdmin, isLoading } = useAuth();
   const { data: booksData } = useBooks(24);
-  const books = booksData || [];
+  const books = useMemo(() => booksData ?? [], [booksData]);
   const [selectedBookIdState, setSelectedBookIdState] = useState<string | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [videosLoading, setVideosLoading] = useState(true);
@@ -33,8 +33,6 @@ export default function AdminVideosPage() {
   const [videoImage, setVideoImage] = useState<File | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [videoAbortController, setVideoAbortController] = useState<AbortController | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoCreatedUrls, setVideoCreatedUrls] = useState<string[]>([]);
   const [videoBatchProgress, setVideoBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [videoProgress, setVideoProgress] = useState<{ step: string; message: string; detail?: string } | null>(null);
@@ -54,7 +52,6 @@ export default function AdminVideosPage() {
     setVideoVoice("nghitts:ngochuyennew");
     setVideoRate("+0%");
     setVideoError(null);
-    setVideoUrl(null);
     setVideoCreatedUrls([]);
     setVideoBatchProgress(null);
     setVideoProgress(null);
@@ -71,8 +68,6 @@ export default function AdminVideosPage() {
       router.replace("/");
     }
   }, [isAdmin, isLoading, router]);
-
-  const selectedBook = books.find((b: any) => b.id === selectedBookIdState);
 
   const loadVideosForJobs = useCallback(async () => {
     setVideosLoading(true);
@@ -218,13 +213,13 @@ export default function AdminVideosPage() {
 
     const sortSelectedIds = (ids: string[]) => {
       if (!ids || ids.length === 0) return ids;
-      const map = new Map(ids.map((id) => [id, videos.find((v) => (v.id ?? v.video_url) === id)]));
+      const map = new Map(ids.map((id) => [id, videos.find((v) => (v.id ?? v.video_url) === id)] as const));
       const arr = Array.from(ids);
       switch (bulkOrder) {
         case "created_asc":
           arr.sort((a, b) => {
-            const va = map.get(a) as any;
-            const vb = map.get(b) as any;
+            const va = map.get(a);
+            const vb = map.get(b);
             const ta = va?.createdAt ? new Date(va.createdAt).getTime() : 0;
             const tb = vb?.createdAt ? new Date(vb.createdAt).getTime() : 0;
             return ta - tb;
@@ -232,27 +227,27 @@ export default function AdminVideosPage() {
           break;
         case "chapters_asc":
           arr.sort((a, b) => {
-            const va = map.get(a) as any;
-            const vb = map.get(b) as any;
-            const ca = Number(va?.chapter_count || va?.chapterCount || 0);
-            const cb = Number(vb?.chapter_count || vb?.chapterCount || 0);
+            const va = map.get(a);
+            const vb = map.get(b);
+            const ca = Number(va?.chapter_count || 0);
+            const cb = Number(vb?.chapter_count || 0);
             return ca - cb;
           });
           break;
         case "chapters_desc":
           arr.sort((a, b) => {
-            const va = map.get(a) as any;
-            const vb = map.get(b) as any;
-            const ca = Number(va?.chapter_count || va?.chapterCount || 0);
-            const cb = Number(vb?.chapter_count || vb?.chapterCount || 0);
+            const va = map.get(a);
+            const vb = map.get(b);
+            const ca = Number(va?.chapter_count || 0);
+            const cb = Number(vb?.chapter_count || 0);
             return cb - ca;
           });
           break;
         default:
           // created_desc
           arr.sort((a, b) => {
-            const va = map.get(a) as any;
-            const vb = map.get(b) as any;
+            const va = map.get(a);
+            const vb = map.get(b);
             const ta = va?.createdAt ? new Date(va.createdAt).getTime() : 0;
             const tb = vb?.createdAt ? new Date(vb.createdAt).getTime() : 0;
             return tb - ta;
@@ -314,13 +309,11 @@ export default function AdminVideosPage() {
 
     setVideoLoading(true);
     setVideoError(null);
-    setVideoUrl(null);
     setVideoCreatedUrls([]);
     setVideoBatchProgress({ current: 1, total: videoBatchCount });
     setVideoProgress({ step: "start", message: "Đang bắt đầu tạo video" });
 
     const controller = new AbortController();
-    setVideoAbortController(controller);
     let currentStart = videoStart;
 
     try {
@@ -333,9 +326,8 @@ export default function AdminVideosPage() {
         setVideoProgress({ step: "batch", message: `Đang tạo video ${index + 1}/${videoBatchCount}` });
         setVideoBatchProgress({ current: index + 1, total: videoBatchCount });
 
-        let result;
         const bookId = selectedBookIdState as string;
-        result = await createVideoFromBook(bookId, currentStart, videoCount, videoImage, videoVoice, videoRate, controller.signal);
+        const result = await createVideoFromBook(bookId, currentStart, videoCount, videoImage, videoVoice, videoRate, controller.signal);
         if (!result.success) {
           setVideoError(result.message || `Lỗi tạo video ${index + 1}`);
           break;
@@ -344,7 +336,6 @@ export default function AdminVideosPage() {
         const urlResult = result.data?.video_url;
         if (urlResult) {
           createdUrls.push(urlResult);
-          setVideoUrl(urlResult);
           setVideoCreatedUrls([...createdUrls]);
         }
 
@@ -367,7 +358,6 @@ export default function AdminVideosPage() {
       }
     } finally {
       setVideoLoading(false);
-      setVideoAbortController(null);
       setVideoBatchProgress(null);
     }
   };
@@ -403,7 +393,7 @@ export default function AdminVideosPage() {
               <label className="text-sm text-zinc-300">Truyện</label>
               <select value={selectedBookIdState || ''} onChange={(e) => setSelectedBookIdState(e.target.value)} className="w-full rounded-2xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none">
                 <option value="">Chọn truyện (book id)</option>
-                {books.map((b: any) => <option key={b.id} value={b.id}>{b.title_vi || b.source_url}</option>)}
+                {books.map((book) => <option key={book.id} value={book.id}>{book.title_vi || book.source_url}</option>)}
               </select>
 
               <div className="grid sm:grid-cols-3 gap-3">

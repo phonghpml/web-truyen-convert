@@ -6,16 +6,32 @@ import { Check, Trash2, Plus, X } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@/lib/useAuth";
 import { deleteBook } from "@/lib/hooks";
-import { ENDPOINTS, MESSAGES } from "@/lib/constants";
+import { ENDPOINTS } from "@/lib/constants";
 import { authFetch } from "@/lib/auth";
-import type { Book } from "@/lib/types";
+import type { Book, BooksApiResponse } from "@/lib/types";
 
 interface BookRow extends Book {
   selected?: boolean;
 }
 
+interface EditableChapterResponse {
+  id?: string;
+  title?: string;
+  title_vi?: string;
+  content?: string;
+  chapter_no?: number;
+  url?: string;
+}
+
+interface BookChaptersResponse {
+  success: boolean;
+  data?: EditableChapterResponse[];
+  error?: string;
+  detail?: string;
+}
+
 export default function AdminBooksPage() {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { isAdmin, isLoading } = useAuth();
   const router = useRouter();
   const [books, setBooks] = useState<BookRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +85,7 @@ export default function AdminBooksPage() {
     setError(null);
     try {
       const response = await authFetch(`${ENDPOINTS.BOOKS}?limit=200`);
-      const result = await response.json();
+      const result = await response.json() as BooksApiResponse;
       if (result.success && Array.isArray(result.data)) {
         setBooks(result.data.map((book: Book) => ({ ...book, selected: false })));
       } else {
@@ -249,14 +265,14 @@ export default function AdminBooksPage() {
 
     try {
       const response = await authFetch(ENDPOINTS.BOOKS_CHAPTERS(book.id), { method: "GET" });
-      const result = await response.json();
+      const result = await response.json() as BookChaptersResponse;
       if (!response.ok || !result.success) {
         throw new Error(result.error || result.detail || "Không thể tải danh sách chương");
       }
 
       const chapters = Array.isArray(result.data) ? result.data : [];
       setEditingChapters(
-        chapters.map((chapter: any) => ({
+        chapters.map((chapter) => ({
           id: chapter.id,
           title: chapter.title || "",
           title_vi: chapter.title_vi || chapter.title || "",

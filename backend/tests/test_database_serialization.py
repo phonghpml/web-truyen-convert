@@ -109,12 +109,22 @@ class SerializationTests(unittest.TestCase):
             chapters=[],
         )
 
-        with patch.object(main.db_mod.client, 'book', new_callable=type, __dict__={}), \
-             patch.object(main.db_mod, 'save_book', AsyncMock(return_value={'id': 'book-1', 'source_url': request.source_url})), \
-             patch.object(main.db_mod.client.chapter, 'upsert', AsyncMock(side_effect=lambda **kwargs: {'id': 'chapter-1', 'title': kwargs['data']['create']['title']})), \
-             patch.object(main.db_mod.client.chapter, 'count', AsyncMock(return_value=2)), \
-             patch.object(main.db_mod.client.book, 'update', AsyncMock(return_value={'id': 'book-1'})):
-            main.db_mod.client.book.find_unique = AsyncMock(return_value=None)
+        fake_client = SimpleNamespace(
+            book=SimpleNamespace(
+                find_unique=AsyncMock(return_value=None),
+                update=AsyncMock(return_value={'id': 'book-1'}),
+            ),
+            chapter=SimpleNamespace(
+                upsert=AsyncMock(side_effect=lambda **kwargs: {
+                    'id': 'chapter-1',
+                    'title': kwargs['data']['create']['title'],
+                }),
+                count=AsyncMock(return_value=2),
+            ),
+        )
+
+        with patch.object(main.db_mod, 'client', fake_client), \
+             patch.object(main.db_mod, 'save_book', AsyncMock(return_value={'id': 'book-1', 'source_url': request.source_url})):
             response = asyncio.run(main.api_create_manual_book(request, current_user={}))
 
         self.assertTrue(response['success'])

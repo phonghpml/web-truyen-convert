@@ -1,5 +1,9 @@
 import { NextRequest } from "next/server";
 
+type ProxyRouteContext = {
+  params: Promise<{ segments: string[] }>;
+};
+
 const DEFAULT_TARGET = process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000";
 const TARGET_BASE = (process.env.NEXT_PUBLIC_CRAWLER_URL || DEFAULT_TARGET).replace(/\/+$/, "");
 
@@ -20,7 +24,7 @@ async function forward(req: Request, segments: string[]) {
     try {
       const body = await req.arrayBuffer();
       init.body = body;
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -51,33 +55,32 @@ async function forward(req: Request, segments: string[]) {
   });
 }
 
-async function resolveSegments(context: any) {
-  // Next.js may provide params as a promise in the route handler context
-  const p = await (context?.params ?? null);
-  return (p && Array.isArray(p.segments) ? p.segments : []);
+async function resolveSegments(context: ProxyRouteContext) {
+  const { segments } = await context.params;
+  return segments;
 }
 
-export async function GET(request: NextRequest, context: any) {
+export async function GET(request: NextRequest, context: ProxyRouteContext) {
   const segments = await resolveSegments(context);
   return forward(request, segments);
 }
-export async function POST(request: NextRequest, context: any) {
+export async function POST(request: NextRequest, context: ProxyRouteContext) {
   const segments = await resolveSegments(context);
   return forward(request, segments);
 }
-export async function PUT(request: NextRequest, context: any) {
+export async function PUT(request: NextRequest, context: ProxyRouteContext) {
   const segments = await resolveSegments(context);
   return forward(request, segments);
 }
-export async function DELETE(request: NextRequest, context: any) {
+export async function DELETE(request: NextRequest, context: ProxyRouteContext) {
   const segments = await resolveSegments(context);
   return forward(request, segments);
 }
-export async function PATCH(request: NextRequest, context: any) {
+export async function PATCH(request: NextRequest, context: ProxyRouteContext) {
   const segments = await resolveSegments(context);
   return forward(request, segments);
 }
-export async function OPTIONS(request: NextRequest, context: any) {
+export async function OPTIONS(request: NextRequest, context: ProxyRouteContext) {
   const segments = await resolveSegments(context);
   return forward(request, segments);
 }
