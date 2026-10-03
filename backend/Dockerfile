@@ -18,6 +18,12 @@ RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
+    xvfb \
+    x11vnc \
+    x11-utils \
+    xauth \
+    novnc \
+    websockify \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Thiết lập thư mục làm việc và User
@@ -25,7 +31,10 @@ WORKDIR /app
 RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
+    PATH=/home/user/.local/bin:$PATH \
+    STV_REMOTE_DESKTOP_ENABLED=true \
+    NOVNC_ASSET_DIR=/usr/share/novnc \
+    PUBLIC_BACKEND_URL=https://phonghp-crawler.hf.space
 
 # 3. Cài đặt thư viện Python
 COPY --chown=user requirements.txt .
@@ -47,5 +56,5 @@ RUN curl -L "https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochu
 # 7. Sinh Prisma Client Python trước khi chạy ứng dụng
 RUN python3 -m prisma py generate
 
-# 8. Chạy ứng dụng trên cổng 7860
-CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# 8. Chạy virtual display, localhost-only VNC/WebSocket bridge và ứng dụng trên cổng HF 7860.
+CMD ["sh", "/app/start_remote_browser.sh"]

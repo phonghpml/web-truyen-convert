@@ -50,6 +50,12 @@ app = FastAPI(lifespan=lifespan)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+NOVNC_ASSET_DIR = Path(os.getenv("NOVNC_ASSET_DIR", "/usr/share/novnc"))
+if NOVNC_ASSET_DIR.is_dir():
+    app.mount("/novnc", StaticFiles(directory=NOVNC_ASSET_DIR), name="novnc")
+NOVNC_ASSET_DIR = Path(os.getenv("NOVNC_ASSET_DIR", "/usr/share/novnc"))
+if NOVNC_ASSET_DIR.is_dir():
+    app.mount("/novnc", StaticFiles(directory=NOVNC_ASSET_DIR), name="novnc")
 
 default_origins = [
     "http://localhost:3000",

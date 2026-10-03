@@ -173,8 +173,19 @@ def is_stv_persistent_profile_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-async def get_browser(use_persistent: bool = False, user_data_dir: str | None = None):
+def is_stv_remote_desktop_enabled() -> bool:
+    value = os.getenv("STV_REMOTE_DESKTOP_ENABLED", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+async def get_browser(
+    use_persistent: bool = False,
+    user_data_dir: str | None = None,
+    headless: bool = True,
+):
     global _context
+    if is_stv_remote_desktop_enabled():
+        headless = False
     async with _browser_lock:
         prev_ctx_id = id(_context) if _context is not None else None
         logger = logging.getLogger(__name__)
@@ -192,7 +203,7 @@ async def get_browser(use_persistent: bool = False, user_data_dir: str | None = 
                     logger.info("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_persistent_context_async...")
                     _context = await cloakbrowser.launch_persistent_context_async(
                         profile_dir,
-                        headless=True,
+                        headless=headless,
                         viewport={'width': 1280, 'height': 720},
                         locale="vi-VN",
                         timezone="Asia/Ho_Chi_Minh",
@@ -221,7 +232,7 @@ async def get_browser(use_persistent: bool = False, user_data_dir: str | None = 
             logger.info("\n[SYSTEM] Khởi chạy CloakBrowser bằng phương thức launch_context_async...")
             try:
                 _context = await cloakbrowser.launch_context_async(
-                    headless=True,
+                    headless=headless,
                     viewport={'width': 1280, 'height': 720},
                     locale="vi-VN",
                     timezone="Asia/Ho_Chi_Minh"
@@ -358,7 +369,7 @@ async def scrape_chapter_content(url: str):
 
 async def scrape_stv_basic_info(url: str):
     url = urllib.parse.unquote(url).strip()
-    context = await get_browser()
+    context = await get_stv_browser()
     page = await context.new_page()
     try:
         # STV metadata có thể có sẵn trong meta tags nên chỉ cần DOMContentLoaded là đủ.
@@ -395,7 +406,7 @@ async def scrape_stv_basic_info(url: str):
 async def scrape_stv_chapters(url: str):
     url = urllib.parse.unquote(url).strip()
     logging.getLogger(__name__).info(f"🔍 Đang lấy danh sách chương từ STV: {url}")
-    context = await get_browser()
+    context = await get_stv_browser()
     page = await context.new_page()
     
     # --- BƯỚC A: TẠO BIẾN ĐỂ HỨNG DỮ LIỆU ---
@@ -484,13 +495,18 @@ def parse_stv_data(raw_str, url):
 
 
 async def get_stv_browser():
-    """Use persistent profile for STV only when the config flag is enabled; otherwise keep the legacy browser flow."""
+    """Use the virtual-display browser when remote admin interaction is enabled."""
+    headless = not is_stv_remote_desktop_enabled()
     if is_stv_persistent_profile_enabled():
         try:
-            return await get_browser(use_persistent=True, user_data_dir=str(STV_PROFILE_DIR))
+            return await get_browser(
+                use_persistent=True,
+                user_data_dir=str(STV_PROFILE_DIR),
+                headless=headless,
+            )
         except Exception:
             logging.getLogger(__name__).warning("⚠️ STV persistent browser failed; falling back to legacy browser context.")
-    return await get_browser()
+    return await get_browser(headless=headless)
 
 
 async def scrape_stv_chapter_content(url: str, job_id: str | None = None):

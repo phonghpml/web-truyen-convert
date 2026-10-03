@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+websockets>=13,<16
 playwright
 prisma
 psycopg2-binary

@@ -1,7 +1,10 @@
 import asyncio
+import json
 import logging
 import os
+import secrets
 import subprocess
+import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +39,7 @@ def _get_field(row: dict, field: str, default=None):
         return row.get(field, default)
     return getattr(row, field, default)
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 
@@ -64,6 +67,7 @@ oauth_router = APIRouter(prefix="/crawl", tags=["crawl-oauth"])
 
 queue_manager = CrawlQueueManager()
 _background_tasks: Dict[str, asyncio.Task] = {}
+_CAPTCHA_DESKTOP_TICKETS: Dict[str, tuple[str, float]] = {}
 
 
 def _build_chapter_range(chapter_start: int, chapter_count: int, total_chapters: int) -> tuple[int, int]:
@@ -1024,6 +1028,136 @@ async def perform_stv_captcha_action(job_id: str, request: STVCaptchaActionReque
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True}
+
+
+@router.post("/captcha/challenges/{job_id}/desktop-ticket")
+async def create_captcha_desktop_ticket(job_id: str, request: Request):
+    if not scr.is_stv_remote_desktop_enabled():
+        raise HTTPException(status_code=503, detail="Remote browser chưa được bật trên server")
+    if not any(challenge["job_id"] == job_id for challenge in scr.get_stv_captcha_challenges()):
+        raise HTTPException(status_code=404, detail="Không còn phiên CAPTCHA cho job này")
+
+    now = time.time()
+    for old_ticket, (_, expires_at) in list(_CAPTCHA_DESKTOP_TICKETS.items()):
+        if expires_at <= now:
+            _CAPTCHA_DESKTOP_TICKETS.pop(old_ticket, None)
+
+    ticket = secrets.token_urlsafe(32)
+    _CAPTCHA_DESKTOP_TICKETS[ticket] = (job_id, now + 120)
+    public_base = os.getenv("PUBLIC_BACKEND_URL", "").strip().rstrip("/")
+    if not public_base:
+        host = request.headers.get("host", "127.0.0.1:8000")
+        forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
+        public_base = f"{forwarded_proto}://{host}"
+
+    return {
+        "success": True,
+        "data": {"url": f"{public_base}/crawl/captcha/desktop#ticket={ticket}"},
+    }
+
+
+@oauth_router.get("/captcha/desktop", response_class=HTMLResponse)
+async def captcha_desktop_page():
+    if not scr.is_stv_remote_desktop_enabled():
+        raise HTTPException(status_code=503, detail="Remote browser chưa được bật trên server")
+
+    return HTMLResponse(
+        """<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Điều khiển browser SangTacViet</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body, #screen { width: 100%; height: 100%; margin: 0; background: #090909; }
+      body { display: flex; flex-direction: column; color: #f4f4f5; font: 14px system-ui, sans-serif; }
+      header { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 16px; background: #18181b; }
+      #status { color: #fbbf24; }
+      #screen { flex: 1; min-height: 0; overflow: hidden; }
+      #screen canvas { width: 100% !important; height: 100% !important; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <header><strong>Browser SangTacViet</strong><span id="status">Đang kết nối...</span></header>
+    <div id="screen"></div>
+    <script type="module">
+      import RFB from "/novnc/core/rfb.js";
+      const status = document.getElementById("status");
+      const ticket = new URLSearchParams(location.hash.slice(1)).get("ticket");
+      history.replaceState(null, "", location.pathname);
+      if (!ticket) {
+        status.textContent = "Thiếu ticket truy cập. Hãy mở lại từ trang quản lý job.";
+      } else {
+        const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        const socketUrl = `${protocol}//${location.host}/crawl/captcha/desktop/ws?ticket=${encodeURIComponent(ticket)}`;
+        const rfb = new RFB(document.getElementById("screen"), socketUrl);
+        rfb.scaleViewport = true;
+        rfb.resizeSession = false;
+        rfb.viewOnly = false;
+        rfb.focusOnClick = true;
+        rfb.addEventListener("connect", () => { status.textContent = "Đã kết nối · thao tác trực tiếp trên browser"; });
+        rfb.addEventListener("disconnect", (event) => { status.textContent = event.detail.clean ? "Đã ngắt kết nối" : "Mất kết nối · mở lại từ trang quản lý job"; });
+        rfb.addEventListener("securityfailure", () => { status.textContent = "Ticket hết hạn hoặc không hợp lệ · mở lại từ trang quản lý job"; });
+      }
+    </script>
+  </body>
+</html>""",
+        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+    )
+
+
+@oauth_router.websocket("/captcha/desktop/ws")
+async def captcha_desktop_websocket(websocket: WebSocket):
+    ticket = websocket.query_params.get("ticket", "")
+    ticket_data = _CAPTCHA_DESKTOP_TICKETS.pop(ticket, None)
+    if not ticket_data or ticket_data[1] <= time.time():
+        await websocket.close(code=4401)
+        return
+
+    job_id = ticket_data[0]
+    if not any(challenge["job_id"] == job_id for challenge in scr.get_stv_captcha_challenges()):
+        await websocket.close(code=4404)
+        return
+
+    await websocket.accept()
+    try:
+        import websockets
+
+        async with websockets.connect("ws://127.0.0.1:6080/websockify", max_size=None) as vnc:
+            async def browser_to_vnc():
+                while True:
+                    message = await websocket.receive()
+                    if message["type"] == "websocket.disconnect":
+                        return
+                    if message.get("bytes") is not None:
+                        await vnc.send(message["bytes"])
+                    elif message.get("text") is not None:
+                        await vnc.send(message["text"])
+
+            async def vnc_to_browser():
+                async for message in vnc:
+                    if isinstance(message, bytes):
+                        await websocket.send_bytes(message)
+                    else:
+                        await websocket.send_text(message)
+
+            tasks = {
+                asyncio.create_task(browser_to_vnc()),
+                asyncio.create_task(vnc_to_browser()),
+            }
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*done, *pending, return_exceptions=True)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        logger.exception("Remote browser WebSocket failed for crawl job %s", job_id)
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
 
 
 @router.delete("/jobs/{job_id}")

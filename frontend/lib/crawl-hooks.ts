@@ -79,6 +79,17 @@ export async function sendCrawlCaptchaAction(jobId: string, action: CrawlCaptcha
   return response.json();
 }
 
+export async function createCrawlCaptchaDesktopUrl(jobId: string): Promise<string> {
+  const response = await authFetch(`${CRAWL_CAPTCHA_BASE}/${encodeURIComponent(jobId)}/desktop-ticket`, {
+    method: "POST",
+  });
+  const result = await response.json();
+  if (!response.ok || !result.success || typeof result.data?.url !== "string") {
+    throw new Error(result.detail || "Không thể mở browser tương tác");
+  }
+  return result.data.url;
+}
+
 export async function submitCrawlJob(url: string) {
   const response = await authFetch(ENDPOINTS.CRAWL_SUBMIT, {
     method: "POST",

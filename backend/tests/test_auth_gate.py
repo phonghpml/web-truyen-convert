@@ -7,9 +7,12 @@ def test_public_paths_match():
     assert is_public_path("/auth/refresh")
     assert is_public_path("/docs")
     assert is_public_path("/static/js/app.js")
+    assert is_public_path("/novnc/core/rfb.js")
+    assert is_public_path("/crawl/captcha/desktop")
 
 
 def test_protected_paths_rejected():
     assert not is_public_path("/books/manual")
     assert not is_public_path("/user/history")
     assert not is_public_path("/chapters/123")
+    assert not is_public_path("/crawl/captcha/desktop/ws")

@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Play, RefreshCw, Send } from "lucide-react";
+import { ExternalLink, Play, RefreshCw, Send } from "lucide-react";
 import {
   CrawlCaptchaChallenge,
+  createCrawlCaptchaDesktopUrl,
   fetchCrawlCaptchaChallenges,
   fetchCrawlCaptchaScreenshot,
   resumeCrawlJob,
@@ -25,10 +26,13 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [captchaText, setCaptchaText] = useState("");
+  const [needsVerificationClick, setNeedsVerificationClick] = useState(false);
+  const [desktopUrl, setDesktopUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageVersion, setImageVersion] = useState(0);
   const pointerStart = useRef<PointerPosition | null>(null);
+  const screenshotUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -59,18 +63,23 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
 
   useEffect(() => {
     if (!selectedJobId) {
+      if (screenshotUrlRef.current) {
+        URL.revokeObjectURL(screenshotUrlRef.current);
+        screenshotUrlRef.current = null;
+      }
       setScreenshotUrl(null);
       return;
     }
 
     let active = true;
-    let objectUrl: string | null = null;
-    setScreenshotUrl(null);
     void fetchCrawlCaptchaScreenshot(selectedJobId)
       .then((blob) => {
         if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setScreenshotUrl(objectUrl);
+        const nextUrl = URL.createObjectURL(blob);
+        const previousUrl = screenshotUrlRef.current;
+        screenshotUrlRef.current = nextUrl;
+        setScreenshotUrl(nextUrl);
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
       })
       .catch((loadError) => {
         if (active) {
@@ -80,9 +89,12 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
 
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [selectedJobId, imageVersion]);
+
+  useEffect(() => () => {
+    if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
+  }, []);
 
   const sendAction = async (action: Parameters<typeof sendCrawlCaptchaAction>[1]) => {
     if (!selectedJobId || busy) return;
@@ -90,6 +102,11 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
     setError(null);
     try {
       await sendCrawlCaptchaAction(selectedJobId, action);
+      if (action.action === "type") {
+        setNeedsVerificationClick(true);
+      } else if (action.action === "click" || action.action === "press") {
+        setNeedsVerificationClick(false);
+      }
       setImageVersion((version) => version + 1);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Không gửi được thao tác");
@@ -111,6 +128,10 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
 
   const resumeSelectedJob = async () => {
     if (!selectedJobId || busy) return;
+    if (needsVerificationClick) {
+      setError("Bấm nút xác thực trên ảnh CAPTCHA trước khi tiếp tục job.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -120,6 +141,28 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
       await onResumed();
     } catch (resumeError) {
       setError(resumeError instanceof Error ? resumeError.message : "Không thể tiếp tục job");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openRemoteDesktop = async () => {
+    if (!selectedJobId || busy) return;
+    const popup = window.open("about:blank", "_blank");
+    setBusy(true);
+    setError(null);
+    setDesktopUrl(null);
+    try {
+      const url = await createCrawlCaptchaDesktopUrl(selectedJobId);
+      if (popup) {
+        popup.opener = null;
+        popup.location.replace(url);
+      } else {
+        setDesktopUrl(url);
+      }
+    } catch (openError) {
+      popup?.close();
+      setError(openError instanceof Error ? openError.message : "Không thể mở browser tương tác");
     } finally {
       setBusy(false);
     }
@@ -154,6 +197,14 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
           ) : null}
           <button
             type="button"
+            onClick={() => void openRemoteDesktop()}
+            disabled={!selectedJobId || busy}
+            className="flex min-h-10 items-center gap-2 border border-amber-600 px-3 text-sm font-semibold text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
+          >
+            <ExternalLink size={16} /> Mở browser thật
+          </button>
+          <button
+            type="button"
             onClick={() => setImageVersion((version) => version + 1)}
             disabled={!selectedJobId || busy}
             aria-label="Tải lại ảnh CAPTCHA"
@@ -165,7 +216,7 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
           <button
             type="button"
             onClick={() => void resumeSelectedJob()}
-            disabled={!selectedJobId || busy}
+            disabled={!selectedJobId || busy || needsVerificationClick}
             className="flex min-h-10 items-center gap-2 bg-emerald-700 px-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
           >
             <Play size={16} /> Tiếp tục job
@@ -174,6 +225,14 @@ export function CrawlCaptchaPanel({ onResumed }: CrawlCaptchaPanelProps) {
       </div>
 
       {error ? <p role="alert" className="mt-3 text-sm text-red-300">{error}</p> : null}
+      {desktopUrl ? (
+        <a href={desktopUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-10 items-center gap-2 border border-amber-600 px-3 text-sm font-semibold text-amber-100 hover:bg-amber-900/40">
+          <ExternalLink size={16} /> Mở browser thật
+        </a>
+      ) : null}
+      {needsVerificationClick ? (
+        <p className="mt-3 text-sm text-amber-200">Đã gửi chữ vào trang STV. Bấm nút xác thực trên ảnh rồi mới tiếp tục job.</p>
+      ) : null}
 
       {selectedJobId ? (
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
