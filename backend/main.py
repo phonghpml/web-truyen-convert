@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     tr.translator.load_all_dicts()
     await db_mod.connect()
     await restore_jobs_from_db()
+    logger.info("[HF_DIAG] diagnostic build marker reached")
     yield
     try:
         await scr.close_browser()
