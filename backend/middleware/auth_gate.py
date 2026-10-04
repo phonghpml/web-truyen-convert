@@ -11,9 +11,7 @@ PUBLIC_PATHS = [
     "/openapi.json",
     "/redoc",
     "/static",
-    "/novnc",
     "/favicon.ico",
-    "/crawl/captcha/desktop",
 ]
 
 # Common read-only endpoints we allow public access to so readers don't need to login
@@ -34,7 +32,6 @@ PUBLIC_PATH_PREFIXES = (
     "/docs/",
     "/redoc/",
     "/static/",
-    "/novnc/",
 )
 
 

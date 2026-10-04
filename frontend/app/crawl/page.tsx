@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { InputGroup } from "@/components/ui/InputGroup";
 import { CrawlJobList } from "@/components/features/CrawlJobList";
-import { CrawlCaptchaPanel } from "@/components/features/CrawlCaptchaPanel";
 import { submitCrawlJob, pauseCrawlJob, resumeCrawlJob, deleteCrawlJob, useCrawlJobs } from "@/lib/crawl-hooks";
 import { useAuth } from "@/lib/useAuth";
 
@@ -205,8 +204,6 @@ export default function CrawlPage() {
             <div className="mt-4 rounded-2xl border border-red-700 bg-red-950/40 px-4 py-3 text-sm text-red-300">{submitError}</div>
           ) : null}
         </div>
-
-        <CrawlCaptchaPanel onResumed={reloadJobs} />
 
         <section className="space-y-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

@@ -20,7 +20,6 @@ PAGE_CLOSE_DELAY_SECONDS = 0
 STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS = 10
 STV_PROFILE_DIR = Path(__file__).resolve().parent / "browser_profiles" / "stv"
 DEBUG_ARTIFACT_DIR = Path(tempfile.gettempdir()) / "web-truyen-convert-debug"
-STV_CAPTCHA_CHALLENGES: dict[str, dict] = {}
 STV_ACCESS_DENIED_CODES = {"7", "21"}
 STV_CAPTCHA_MARKERS = (
     "captcha",
@@ -46,85 +45,6 @@ class STVAccessBlocked(RuntimeError):
 def _contains_stv_captcha_marker(text: str) -> bool:
     normalized = text.casefold()
     return any(marker.casefold() in normalized for marker in STV_CAPTCHA_MARKERS)
-
-
-def get_stv_captcha_challenges() -> list[dict]:
-    return [
-        {
-            "job_id": job_id,
-            "chapter_id": challenge["chapter_id"],
-            "chapter_url": challenge["chapter_url"],
-            "code": challenge["code"],
-            "captcha_detected": challenge["captcha_detected"],
-            "created_at": challenge["created_at"],
-        }
-        for job_id, challenge in STV_CAPTCHA_CHALLENGES.items()
-    ]
-
-
-async def get_stv_captcha_screenshot(job_id: str) -> bytes | None:
-    challenge = STV_CAPTCHA_CHALLENGES.get(job_id)
-    if not challenge:
-        return None
-    page = challenge["page"]
-    if page.is_closed():
-        STV_CAPTCHA_CHALLENGES.pop(job_id, None)
-        return None
-    return await page.screenshot(type="png")
-
-
-async def perform_stv_captcha_action(job_id: str, action: dict) -> None:
-    challenge = STV_CAPTCHA_CHALLENGES.get(job_id)
-    if not challenge:
-        raise KeyError(job_id)
-
-    page = challenge["page"]
-    if page.is_closed():
-        STV_CAPTCHA_CHALLENGES.pop(job_id, None)
-        raise KeyError(job_id)
-
-    action_type = action.get("action")
-    if action_type == "click":
-        await page.mouse.click(_required_action_number(action, "x"), _required_action_number(action, "y"))
-    elif action_type == "drag":
-        await page.mouse.move(_required_action_number(action, "x"), _required_action_number(action, "y"))
-        await page.mouse.down()
-        try:
-            await page.mouse.move(
-                _required_action_number(action, "end_x"),
-                _required_action_number(action, "end_y"),
-                steps=20,
-            )
-        finally:
-            await page.mouse.up()
-    elif action_type == "type":
-        text = action.get("text")
-        if not isinstance(text, str) or not text:
-            raise ValueError("Text action requires non-empty text")
-        await page.keyboard.insert_text(text)
-    elif action_type == "press":
-        key = action.get("key")
-        if not isinstance(key, str) or not key:
-            raise ValueError("Press action requires a key")
-        await page.keyboard.press(key)
-    else:
-        raise ValueError(f"Unsupported CAPTCHA action: {action_type}")
-
-
-def _required_action_number(action: dict, key: str) -> float:
-    value = action.get(key)
-    if not isinstance(value, (int, float)):
-        raise ValueError(f"CAPTCHA action requires numeric {key}")
-    return float(value)
-
-
-async def close_stv_captcha_challenge(job_id: str) -> None:
-    challenge = STV_CAPTCHA_CHALLENGES.pop(job_id, None)
-    if not challenge:
-        return
-    page = challenge["page"]
-    if not page.is_closed():
-        await page.close()
 
 
 def _debug_artifact_path(filename: str) -> Path:
@@ -173,19 +93,12 @@ def is_stv_persistent_profile_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-def is_stv_remote_desktop_enabled() -> bool:
-    value = os.getenv("STV_REMOTE_DESKTOP_ENABLED", "false").strip().lower()
-    return value in {"1", "true", "yes", "on"}
-
-
 async def get_browser(
     use_persistent: bool = False,
     user_data_dir: str | None = None,
     headless: bool = True,
 ):
     global _context
-    if is_stv_remote_desktop_enabled():
-        headless = False
     async with _browser_lock:
         prev_ctx_id = id(_context) if _context is not None else None
         logger = logging.getLogger(__name__)
@@ -258,10 +171,8 @@ async def close_browser():
             logger.exception(f"⚠️ Lỗi khi đóng CloakBrowser context: {e}")
         finally:
             _context = None
-            STV_CAPTCHA_CHALLENGES.clear()
             logger.warning("[BROWSER] context set to None after close")
     else:
-        STV_CAPTCHA_CHALLENGES.clear()
         logger.warning("[BROWSER] close_browser called but _context is None")
 
 async def scrape_basic_info(url: str):
@@ -495,18 +406,15 @@ def parse_stv_data(raw_str, url):
 
 
 async def get_stv_browser():
-    """Use the virtual-display browser when remote admin interaction is enabled."""
-    headless = not is_stv_remote_desktop_enabled()
     if is_stv_persistent_profile_enabled():
         try:
             return await get_browser(
                 use_persistent=True,
                 user_data_dir=str(STV_PROFILE_DIR),
-                headless=headless,
             )
         except Exception:
             logging.getLogger(__name__).warning("⚠️ STV persistent browser failed; falling back to legacy browser context.")
-    return await get_browser(headless=headless)
+    return await get_browser()
 
 
 async def scrape_stv_chapter_content(url: str, job_id: str | None = None):
@@ -584,8 +492,6 @@ async def scrape_stv_chapter_content(url: str, job_id: str | None = None):
                 logging.getLogger(__name__).debug(f"⏭️ [SKIP] Bỏ qua API không khớp ID: {res_url}")
 
     page.on("response", handle_response)
-    keep_page_open = False
-
     try:
         logging.getLogger(__name__).debug(f"Step 1: Điều hướng tới {url}")
         await page.route("**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2,ttf,eot,ico}", lambda route: route.abort())
@@ -642,24 +548,19 @@ async def scrape_stv_chapter_content(url: str, job_id: str | None = None):
 
         if not found:
             logging.getLogger(__name__).warning(f"❌ [TIMEOUT] Không bắt được dữ liệu cho chương {target_chap_id}")
+            try:
+                page_text = await page.locator("body").inner_text(timeout=2000)
+            except Exception:
+                page_text = await page.content()
+            captcha_detected = _contains_stv_captcha_marker(page_text)
+            if captured_data["blocked_code"] or captcha_detected:
+                access_code = captured_data["blocked_code"] or "captcha_detected"
+                logging.getLogger(__name__).warning(
+                    "[CAPTCHA] Access challenge detected; stopping without interaction | chapter_id=%s",
+                    target_chap_id,
+                )
+                raise STVAccessBlocked(access_code, captcha_detected, job_id)
             await _save_debug_screenshot(page, f"debug_{target_chap_id}_2_timeout.png")
-            if captured_data["blocked_code"]:
-                try:
-                    page_text = await page.locator("body").inner_text(timeout=2000)
-                except Exception:
-                    page_text = await page.content()
-                captcha_detected = _contains_stv_captcha_marker(page_text)
-                challenge_key = job_id or f"{url}::{target_chap_id}"
-                STV_CAPTCHA_CHALLENGES[challenge_key] = {
-                    "page": page,
-                    "chapter_id": target_chap_id,
-                    "chapter_url": url,
-                    "code": captured_data["blocked_code"],
-                    "captcha_detected": captcha_detected,
-                    "created_at": time.time(),
-                }
-                keep_page_open = True
-                raise STVAccessBlocked(captured_data["blocked_code"], captcha_detected, job_id)
             return None
 
         logging.getLogger(__name__).debug(f"Step 6: Bóc tách nội dung (Nguồn: {source_type})...")
@@ -688,13 +589,10 @@ async def scrape_stv_chapter_content(url: str, job_id: str | None = None):
     finally:
         logger = logging.getLogger(__name__)
         page.remove_listener("response", handle_response)
-        if keep_page_open:
-            logger.info("[CAPTCHA] Keeping STV challenge page open for manual admin interaction | job_id=%s chapter_id=%s", job_id, target_chap_id)
-        else:
-            logger.info(f"[PAGE] closing page for STV chapter. ctx_id={id(context)}, page_count_before_close={len(context.pages)}")
-            await asyncio.sleep(STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS)
-            await page.close()
-            logger.info(f"[PAGE] page closed for STV chapter. ctx_id={id(context)}, page_count_after_close={len(context.pages)}")
+        logger.info(f"[PAGE] closing page for STV chapter. ctx_id={id(context)}, page_count_before_close={len(context.pages)}")
+        await asyncio.sleep(STV_CHAPTER_PAGE_CLOSE_DELAY_SECONDS)
+        await page.close()
+        logger.info(f"[PAGE] page closed for STV chapter. ctx_id={id(context)}, page_count_after_close={len(context.pages)}")
         logging.getLogger(__name__).info(f"🏁 [FINISHED] Giải phóng tài nguyên chương {target_chap_id}")
     
 import datetime
