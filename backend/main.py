@@ -910,7 +910,7 @@ async def api_stream_audio(
 
         return StreamingResponse(audio_generator(), media_type="audio/mpeg")
     except Exception as e:
-        logger.exception("Lỗi TTS với voice=%s: %s", voice, e)
+        logger.exception("❌ Lỗi TTS với voice=%s: %s", voice, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- Cập nhật endpoint /get-basic-info ---
