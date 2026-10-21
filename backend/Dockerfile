@@ -3,6 +3,7 @@ FROM python:3.14
 # 1. Cài đặt các thư viện hệ thống cần thiết (Dùng quyền root mặc định của Docker build)
 USER root
 RUN apt-get update && apt-get install -y \
+    curl \
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -47,5 +48,6 @@ RUN curl -L "https://huggingface.co/Phonghp/webtruyen-models/resolve/main/ngochu
 # 7. Sinh Prisma Client Python trước khi chạy ứng dụng
 RUN python3 -m prisma py generate
 
-# 8. Chạy ứng dụng trên cổng HF 7860.
-CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# 8. Chạy ứng dụng trên cổng 8000.
+EXPOSE 8000
+CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
