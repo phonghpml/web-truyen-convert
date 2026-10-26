@@ -34,7 +34,7 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
   }, []);
 
   return (
-    <nav className="sticky top-0 z-50 mx-auto mb-6 flex w-full max-w-6xl items-center justify-between border-b border-zinc-800 bg-black/80 px-4 pb-4 pt-2 backdrop-blur-md md:mb-8">
+    <nav className="sticky top-0 z-50 mx-auto mb-6 flex w-full max-w-6xl items-center justify-between border-b border-zinc-800 bg-black/80 px-2 pb-4 pt-2 backdrop-blur-md sm:px-4 md:mb-8">
       {/* 1. LOGO */}
       <div className="flex min-w-0 items-center gap-2 sm:gap-4 md:gap-8">
         {hasSidebar && managementSidebar && (
@@ -43,7 +43,7 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
             onClick={managementSidebar.toggleMobileMenu}
             aria-expanded={managementSidebar.mobileOpen}
             aria-label={managementSidebar.mobileOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-zinc-300 transition hover:bg-zinc-900 hover:text-white lg:hidden"
+            className="-ml-2.5 flex size-9 shrink-0 items-center justify-center rounded-md text-zinc-300 transition hover:bg-zinc-900 hover:text-white lg:hidden"
           >
             <Menu size={19} />
           </button>

@@ -400,7 +400,7 @@ export default function ChapterPage() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-300 flex flex-col font-sans">
-      <div className="w-full max-w-7xl mx-auto px-4 overflow-x-hidden">
+      <div className="mx-auto w-full max-w-7xl overflow-x-clip px-4">
         <Navbar />
       </div>
 

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Download, Menu, Trophy, Video, X } from "lucide-react";
+import { BookOpen, Download, PanelLeftClose, PanelLeftOpen, Trophy, Video, X } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 
 interface ManagementSidebarControls {
@@ -76,8 +76,7 @@ export function ManagementSidebar({ children }: { children: React.ReactNode }) {
   return (
     <ManagementSidebarContext.Provider value={{ mobileOpen, toggleMobileMenu }}>
       <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-800 bg-zinc-950 transition-[width] duration-200 lg:flex ${desktopCollapsed ? "w-16" : "w-64"}`}>
-        <div className={`flex h-14 items-center border-b border-zinc-800 ${desktopCollapsed ? "justify-center px-2" : "justify-between px-4"}`}>
-          {!desktopCollapsed && <p className="truncate text-xs font-semibold text-zinc-300">Không gian làm việc</p>}
+        <div className={`flex h-14 items-center border-b border-zinc-800 ${desktopCollapsed ? "justify-center px-2" : "justify-start gap-2 px-2"}`}>
           <button
             type="button"
             onClick={() => setDesktopCollapsed((collapsed) => !collapsed)}
@@ -86,8 +85,9 @@ export function ManagementSidebar({ children }: { children: React.ReactNode }) {
             title={desktopCollapsed ? "Mở rộng menu" : "Thu gọn menu"}
             className="flex size-9 shrink-0 items-center justify-center rounded-md text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
           >
-            <Menu size={18} />
+            {desktopCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
+          {!desktopCollapsed && <p className="truncate text-xs font-semibold text-zinc-300">Không gian làm việc</p>}
         </div>
         <div className={`flex flex-col gap-6 py-5 ${desktopCollapsed ? "px-2" : "px-3"}`}>
           {renderLinkGroup("Khám phá", discoveryItems, false, desktopCollapsed)}
