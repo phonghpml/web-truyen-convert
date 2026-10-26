@@ -64,7 +64,11 @@ Không chạy `docker compose down -v` nếu muốn giữ dữ liệu trong volu
 
 Tạo một HTTPS tunnel trỏ tới `http://localhost:8000` (ví dụ Cloudflare Tunnel), không cấu hình port-forward `8000` trên router. Tunnel cần chạy trên chính máy Windows và khởi động cùng Windows.
 
-Trong Vercel, đặt biến môi trường `API_BASE_URL` thành URL HTTPS của tunnel, ví dụ `https://your-machine.your-tailnet.ts.net`, rồi redeploy frontend. Frontend production gọi backend qua cùng-origin `/api`; `API_BASE_URL` chỉ được Next.js server dùng làm đích proxy trong `frontend/next.config.ts`. Không đặt Supabase service-role key trong Vercel.
+Trong Vercel → Project → Settings → Environment Variables, đặt `NEXT_PUBLIC_CRAWLER_URL` thành URL HTTPS của tunnel, ví dụ `https://your-machine.your-tailnet.ts.net` (không thêm `/api` hoặc dấu `/` ở cuối). Xóa biến `API_BASE_URL` cũ nếu có, rồi redeploy frontend.
+
+Frontend gọi trực tiếp URL Funnel từ trình duyệt để các tác vụ crawl/TTS/video không phải đi vòng qua proxy/serverless của Vercel. Vì đây là request cross-origin, `FRONTEND_ORIGINS` trong `backend/.env.deploy` phải chứa chính xác domain frontend, ví dụ `https://web-truyen-convert.vercel.app`. Nếu frontend có custom domain, thêm cả origin đó, phân tách bằng dấu phẩy. Sau khi sửa env backend, chạy `docker compose up -d --force-recreate backend`.
+
+Không đặt Supabase service-role key trong Vercel. CORS chỉ cho phép browser gửi request từ origin đã khai báo; các API vẫn cần xác thực người dùng như hiện tại.
 
 ### 5. Cập nhật backend
 

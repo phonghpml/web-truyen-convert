@@ -1,5 +1,10 @@
-// Environment constants
-export const CRAWLER_BASE_URL = "/api";
+const configuredCrawlerUrl = process.env.NEXT_PUBLIC_CRAWLER_URL;
+
+if (process.env.NODE_ENV === "production" && !configuredCrawlerUrl) {
+  throw new Error("NEXT_PUBLIC_CRAWLER_URL must be set for production builds");
+}
+
+export const CRAWLER_BASE_URL = (configuredCrawlerUrl || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 // API Endpoints
 export const ENDPOINTS = {
