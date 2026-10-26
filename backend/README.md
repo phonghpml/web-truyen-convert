@@ -66,7 +66,7 @@ Tạo một HTTPS tunnel trỏ tới `http://localhost:8000` (ví dụ Cloudflar
 
 Trong Vercel → Project → Settings → Environment Variables, đặt `NEXT_PUBLIC_CRAWLER_URL` thành URL HTTPS của tunnel, ví dụ `https://your-machine.your-tailnet.ts.net` (không thêm `/api` hoặc dấu `/` ở cuối). Xóa biến `API_BASE_URL` cũ nếu có, rồi redeploy frontend.
 
-Frontend gọi trực tiếp URL Funnel từ trình duyệt để các tác vụ crawl/TTS/video không phải đi vòng qua proxy/serverless của Vercel. Vì đây là request cross-origin, `FRONTEND_ORIGINS` trong `backend/.env.deploy` phải chứa chính xác domain frontend, ví dụ `https://web-truyen-convert.vercel.app`. Nếu frontend có custom domain, thêm cả origin đó, phân tách bằng dấu phẩy. Sau khi sửa env backend, chạy `docker compose up -d --force-recreate backend`.
+Frontend gọi trực tiếp URL Funnel từ trình duyệt để các tác vụ crawl/TTS/video không phải đi vòng qua proxy/serverless của Vercel. Backend luôn cho phép các origin local mặc định (`http://localhost:3000` và `http://127.0.0.1:3000`) và cộng thêm các origin trong `FRONTEND_ORIGINS`. Đặt biến này là domain frontend, ví dụ `https://web-truyen-convert.vercel.app`; nếu frontend có custom domain, thêm origin đó, phân tách bằng dấu phẩy. Sau khi cập nhật code backend, chạy `docker compose up -d --build backend` để áp dụng thay đổi.
 
 Không đặt Supabase service-role key trong Vercel. CORS chỉ cho phép browser gửi request từ origin đã khai báo; các API vẫn cần xác thực người dùng như hiện tại.
 

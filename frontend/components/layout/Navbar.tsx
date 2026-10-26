@@ -50,13 +50,14 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
         )}
         <button 
           onClick={() => { onHomeClick?.(); router.push("/"); }} 
-          className="flex items-center gap-2 group transition-all duration-300"
+          aria-label="Web Truyện"
+          className="group flex shrink-0 items-center gap-1.5 transition-all duration-300 sm:gap-2"
         >
-          <div className="bg-orange-500 text-black p-1.5 rounded-sm shadow-[0_0_15px_rgba(249,115,22,0.4)] group-hover:scale-110 transition-transform">
-            <Home size={18} fill="currentColor" />
+          <div className="rounded-sm bg-orange-500 p-1 text-black shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-transform group-hover:scale-110 sm:p-1.5">
+            <Home size={13} fill="currentColor" className="sm:size-[18px]" />
           </div>
-          <span className="text-lg font-black uppercase italic tracking-tighter text-orange-500 transition-colors group-hover:text-white sm:text-xl md:text-2xl">
-            WEB_TRUYEN
+          <span className="whitespace-nowrap text-[12px] font-black uppercase italic leading-none tracking-[-0.06em] text-orange-500 transition-colors group-hover:text-white sm:text-xl sm:tracking-tighter md:text-2xl">
+            WEB TRUYỆN
           </span>
         </button>
 
@@ -84,8 +85,8 @@ export const Navbar = ({ onHomeClick }: NavbarProps) => {
               onClick={() => setIsOpen(!isOpen)}
               className="flex items-center gap-2 md:gap-3 bg-zinc-900/80 p-1 pr-2 md:pr-4 rounded-full border border-zinc-800 hover:border-orange-500/50 transition-all active:scale-95 shadow-lg"
             >
-              <div className="w-8 h-8 rounded-full border border-orange-500/50 overflow-hidden bg-black flex items-center justify-center shrink-0">
-                <User size={14} className="text-orange-500" />
+              <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-orange-500/50 bg-black sm:size-8">
+                <User size={12} className="text-orange-500 sm:size-[14px]" />
               </div>
               
               <div className="hidden sm:flex flex-col items-start leading-none max-w-[120px]">

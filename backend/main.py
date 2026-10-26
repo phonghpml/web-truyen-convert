@@ -57,15 +57,11 @@ default_origins = [
     "https://web-truyen-convert.vercel.app",
 ]
 
-# Đọc từ env, nếu không có hoặc rỗng thì dùng default_origins
+# Giữ các origin local mặc định và bổ sung origin được cấu hình cho môi trường deploy.
 raw_env = os.getenv("FRONTEND_ORIGINS", "")
-if raw_env.strip():
-    env_origins = [o.strip() for o in raw_env.split(",") if o.strip()]
-else:
-    env_origins = default_origins
+env_origins = [o.strip() for o in raw_env.split(",") if o.strip()]
 
-# Tổng hợp và gộp trùng lặp
-configured_origins = list(dict.fromkeys(["https://web-truyen-convert.vercel.app"] + env_origins))
+configured_origins = list(dict.fromkeys(default_origins + env_origins))
 
 logger.info("CORS configured origins: %s", configured_origins)
 

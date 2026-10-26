@@ -27,29 +27,29 @@ import {
 // CẤU TRÚC PHÂN NHÓM BXH CHUẨN QUY MÔ QIDIAN
 const RANK_CATEGORIES = [
   {
-    groupTitle: '热门作品排行 / Tác Phẩm Hot',
+    groupTitle: 'Tác Phẩm Hot',
     items: [
-      { id: 'yuepiao', name: 'Nguyệt Phiếu (Vé Tháng)', sub: '月票榜', icon: <Flame size={14} className="text-red-500" /> },
-      { id: 'hotsales', name: 'Bán Chạy Nhất', sub: '畅销榜', icon: <Zap size={14} className="text-yellow-500" /> },
-      { id: 'readindex', name: 'Chỉ Số Đọc', sub: '阅读指数榜', icon: <Award size={14} className="text-blue-500" /> },
-      { id: 'recom', name: 'Đề Cử Tuần', sub: '推荐榜', icon: <TrendingUp size={14} className="text-emerald-500" /> },
-      { id: 'collect', name: 'Sưu Tầm Số Lượng', sub: '收藏榜', icon: <Bookmark size={14} className="text-purple-500" /> },
-      { id: 'vipup', name: 'Cập Nhật VIP', sub: '更新榜', icon: <RefreshCw size={14} className="text-cyan-500" /> },
+      { id: 'yuepiao', name: 'Nguyệt Phiếu (Vé Tháng)', icon: <Flame size={14} className="text-red-500" /> },
+      { id: 'hotsales', name: 'Bán Chạy Nhất', icon: <Zap size={14} className="text-yellow-500" /> },
+      { id: 'readindex', name: 'Chỉ Số Đọc', icon: <Award size={14} className="text-blue-500" /> },
+      { id: 'recom', name: 'Đề Cử Tuần', icon: <TrendingUp size={14} className="text-emerald-500" /> },
+      { id: 'collect', name: 'Sưu Tầm Số Lượng', icon: <Bookmark size={14} className="text-purple-500" /> },
+      { id: 'vipup', name: 'Cập Nhật VIP', icon: <RefreshCw size={14} className="text-cyan-500" /> },
     ]
   },
   {
-    groupTitle: '新书 bxh 排行 / Sách Mới',
+    groupTitle: 'Sách Mới',
     items: [
-      { id: 'signnewbook', name: 'Mới Ký Hợp Đồng', sub: '签约作者新书榜', icon: <Sparkles size={14} className="text-pink-500" /> },
-      { id: 'pubnewbook', name: 'Tác Phẩm Mới Ra', sub: '公众作者新书榜', icon: <Sparkles size={14} className="text-teal-500" /> },
-      { id: 'newauthor', name: 'Tác Giả Mới Xuất Hiện', sub: '新人 author 榜', icon: <Users size={14} className="text-orange-500" /> }
+      { id: 'signnewbook', name: 'Mới Ký Hợp Đồng', icon: <Sparkles size={14} className="text-pink-500" /> },
+      { id: 'pubnewbook', name: 'Tác Phẩm Mới Ra', icon: <Sparkles size={14} className="text-teal-500" /> },
+      { id: 'newauthor', name: 'Tác Giả Mới Xuất Hiện', icon: <Users size={14} className="text-orange-500" /> }
     ]
   },
   {
-    groupTitle: '女生频道 / Danh Mục Nữ Sinh',
+    groupTitle: 'Danh Mục Nữ Sinh',
     items: [
-      { id: 'mm', name: 'Nữ Sinh Chọn Lọc', sub: '女生作品 bxh', icon: <Heart size={14} className="text-rose-400" /> },
-      { id: 'mm/yuepiao', name: 'Nữ Sinh Nguyệt Phiếu', sub: '女生月票榜', icon: <Flame size={14} className="text-rose-500" /> }
+      { id: 'mm', name: 'Nữ Sinh Chọn Lọc', icon: <Heart size={14} className="text-rose-400" /> },
+      { id: 'mm/yuepiao', name: 'Nữ Sinh Nguyệt Phiếu', icon: <Flame size={14} className="text-rose-500" /> }
     ]
   }
 ];
@@ -77,15 +77,20 @@ const BOOK_CATEGORIES = [
 interface BookItem {
   rank: number;
   title?: string;
-  title_cn?: string;
   author?: string;
   category?: string;
-  category_cn?: string;
   intro?: string;
   desc_vi?: string;
   coverUrl?: string;
   sourceUrl?: string;
   slug?: string;
+}
+
+function removeChineseText(value?: string): string {
+  return (value || '')
+    .replace(/[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function RankContent() {
@@ -118,7 +123,7 @@ function RankContent() {
       const found = group.items.find(item => item.id === currentType);
       if (found) return found;
     }
-    return { name: 'BẢNG XẾP HẠNG', sub: 'RANKING' };
+    return { name: 'BẢNG XẾP HẠNG' };
   };
 
   useEffect(() => {
@@ -164,7 +169,7 @@ function RankContent() {
   }, [currentType, currentChn, currentPage, currentYear, currentMonth, searchParams]);
 
   const handleNavigateToSangTacViet = (book: BookItem) => {
-    const searchTitle = book.title || book.title_cn || 'Web Truyen';
+    const searchTitle = removeChineseText(book.title) || 'Web Truyen';
     let targetUrl = `https://sangtacviet.com/truyen/?find=${encodeURIComponent(searchTitle)}`;
 
     if (book.sourceUrl) {
@@ -187,9 +192,6 @@ function RankContent() {
           <h1 className="break-words text-lg font-black uppercase italic tracking-tight text-white sm:text-xl md:text-2xl">
             {getActiveRankMeta().name}
           </h1>
-          <span className="break-words text-[9px] uppercase tracking-wider text-zinc-600 sm:text-[10px] md:text-xs">
-            {"// "}{getActiveRankMeta().sub}
-          </span>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
@@ -222,9 +224,6 @@ function RankContent() {
                           </span>
                           <span className="text-xs tracking-tight truncate">{item.name}</span>
                         </div>
-                        <span className="text-[9px] font-sans opacity-40 font-medium shrink-0 group-hover:opacity-60 hidden sm:inline ml-2">
-                          {item.sub}
-                        </span>
                       </button>
                     );
                   })}
@@ -258,7 +257,7 @@ function RankContent() {
 
               <div className="flex-1 flex flex-row sm:flex-wrap gap-1.5 items-center overflow-x-auto sm:overflow-x-visible pb-1 sm:pb-0 scrollbar-none snap-x">
                 <span className="text-[10px] font-mono uppercase font-bold text-zinc-600 px-2 select-none shrink-0 hidden md:inline">
-                  Thể loại //
+                  Thể loại:
                 </span>
                 {BOOK_CATEGORIES.map((cat) => {
                   const isCatActive = currentChn === cat.id;
@@ -298,6 +297,10 @@ function RankContent() {
               <div className="flex flex-col gap-3 w-full">
                 {books.map((book, index) => {
                   const dynamicRank = index + 1 + (currentPage - 1) * 20;
+                  const displayTitle = removeChineseText(book.title) || 'Tiêu đề chưa được dịch';
+                  const displayAuthor = removeChineseText(book.author) || 'Tác giả ẩn danh';
+                  const displayCategory = removeChineseText(book.category) || 'Chưa phân loại';
+                  const displayIntro = removeChineseText(book.intro || book.desc_vi) || 'Chưa có tóm tắt nội dung.';
 
                   const rankBadgeColor = 
                     dynamicRank === 1 ? 'bg-amber-500 text-black font-black' :
@@ -323,7 +326,7 @@ function RankContent() {
                           {book.coverUrl ? (
                             <Image
                               src={book.coverUrl}
-                              alt={book.title || book.title_cn || 'Bìa truyện'}
+                              alt={displayTitle}
                               fill
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               unoptimized
@@ -338,24 +341,24 @@ function RankContent() {
                         <div className="flex flex-col justify-between flex-1 min-w-0 min-h-[96px] sm:min-h-[112px]">
                           <div className="space-y-1 w-full">
                             <h3 className="font-bold text-sm md:text-base text-zinc-100 whitespace-normal sm:truncate group-hover:text-orange-500 transition-colors tracking-tight leading-snug">
-                              {book.title || book.title_cn || 'Tiêu đề không rõ'}
+                              {displayTitle}
                             </h3>
                             
                             <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-0.5 text-[11px] md:text-xs text-zinc-400 w-full">
                               <span className="font-medium flex items-center gap-1 text-zinc-300 sm:text-zinc-400 break-all sm:break-normal">
-                                <User size={11} className="text-zinc-600 shrink-0" /> {book.author || 'Tác giả ẩn danh'}
+                                <User size={11} className="text-zinc-600 shrink-0" /> {displayAuthor}
                               </span>
                               <span className="text-zinc-800 hidden sm:inline">|</span>
                               <span className="text-zinc-500 flex items-center gap-1 sm:truncate">
-                                <Layers size={11} className="text-zinc-700 shrink-0" /> {book.category || book.category_cn || 'Chưa phân loại'}
+                                <Layers size={11} className="text-zinc-700 shrink-0" /> {displayCategory}
                               </span>
                             </div>
                             
                             <div className="text-[11px] md:text-xs text-zinc-400 leading-relaxed pt-0.5 break-words">
                               <p className={`transition-all duration-200 ${isExpanded ? '' : 'line-clamp-2 sm:line-clamp-3'}`}>
-                                {book.intro || book.desc_vi || 'Chưa có tóm tắt nội dung.'}
+                                {displayIntro}
                               </p>
-                              {book.intro && book.intro.length > 50 && (
+                              {displayIntro.length > 50 && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
