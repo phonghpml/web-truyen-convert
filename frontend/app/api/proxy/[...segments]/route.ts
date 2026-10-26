@@ -4,8 +4,8 @@ type ProxyRouteContext = {
   params: Promise<{ segments: string[] }>;
 };
 
-const DEFAULT_TARGET = process.env.NEXT_PUBLIC_CRAWLER_URL || "http://127.0.0.1:8000";
-const TARGET_BASE = (process.env.NEXT_PUBLIC_CRAWLER_URL || DEFAULT_TARGET).replace(/\/+$/, "");
+const DEFAULT_TARGET = process.env.API_BASE_URL || "http://127.0.0.1:8000";
+const TARGET_BASE = DEFAULT_TARGET.replace(/\/+$/, "");
 
 async function forward(req: Request, segments: string[]) {
   const url = new URL(req.url);

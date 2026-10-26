@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ./backend/.env.deploy
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - backend_static:/app/static
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  backend_static:

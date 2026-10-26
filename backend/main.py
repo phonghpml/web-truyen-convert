@@ -33,11 +33,8 @@ from middleware.auth_gate import enforce_auth_middleware
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 Hệ thống Convert đã sẵn sàng với 1.4 triệu cụm từ!")
-    # Đảm bảo nạp từ điển vào RAM từ đây
-    tr.translator.load_all_dicts()
     await db_mod.connect()
     await restore_jobs_from_db()
-    logger.info("[HF_DIAG] diagnostic build marker reached")
     yield
     try:
         await scr.close_browser()
